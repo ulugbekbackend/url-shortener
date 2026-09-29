@@ -44,7 +44,8 @@ def create_refresh_token(data: dict[str, Any]) -> tuple[str, str]:
     """Create a JWT refresh token and return (token, token_hash)."""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    # jti makes every token unique even when issued within the same second
+    to_encode.update({"exp": expire, "type": "refresh", "jti": secrets.token_hex(16)})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     token_hash = hash_token(encoded_jwt)
     return encoded_jwt, token_hash

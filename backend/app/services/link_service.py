@@ -1,16 +1,38 @@
 """Link service - business logic for links."""
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Any, Optional, List
 from uuid import UUID
 import hashlib
 
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.errors import AppError
+from app.core.redis import get_redis
 from app.core.security import generate_code, hash_password
 from app.models.models import Link, Tag, LinkTag
+from app.services.url_validator import validate_target_url
+
+
+def link_cache_key(code: str) -> str:
+    """Redis key of the cached redirect data for a short code."""
+    return f"link:{code}"
+
+
+def click_counter_key(link_id: UUID | str) -> str:
+    """Redis key of the live click counter of a link."""
+    return f"clicks:{link_id}"
+
+
+def _is_reserved(code: str) -> bool:
+    return code.lower() in {r.lower() for r in settings.RESERVED_CODES}
+
+
+def _code_taken(code: str) -> AppError:
+    return AppError(409, "CODE_TAKEN", f"Code '{code}' is already taken")
 
 
 class LinkService:
@@ -32,10 +54,14 @@ class LinkService:
         is_permanent: bool = False,
     ) -> Link:
         """Create a new link."""
+        validate_target_url(url)
+        
         # Generate or validate code
         if custom_code:
-            if custom_code.lower() in [r.lower() for r in settings.RESERVED_CODES]:
+            if _is_reserved(custom_code):
                 raise ValueError(f"Code '{custom_code}' is reserved")
+            if await self.get_link_by_code(custom_code):
+                raise _code_taken(custom_code)
             code = custom_code
             is_custom = True
         else:
@@ -65,13 +91,22 @@ class LinkService:
             tags=tag_objs,
         )
         self.db.add(link)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # Lost a race for the same custom code
+            await self.db.rollback()
+            raise _code_taken(code)
+        # Drop a cached "not found" for this code
+        await self._invalidate_cache(code)
         return await self._reload(link.id)
     
     async def _generate_unique_code(self, max_attempts: int = 5) -> str:
         """Generate a unique code with collision retry."""
         for _ in range(max_attempts):
             code = generate_code()
+            if _is_reserved(code):
+                continue
             existing = await self.get_link_by_code(code)
             if not existing:
                 return code
@@ -160,37 +195,28 @@ class LinkService:
         self,
         link_id: UUID,
         user_id: UUID,
-        title: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        expires_at: Optional[datetime] = None,
-        max_clicks: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        is_permanent: Optional[bool] = None,
+        changes: dict[str, Any],
     ) -> Optional[Link]:
-        """Update a link."""
+        """Apply the fields present in `changes`; None clears a nullable field."""
         link = await self.get_link_by_id(link_id, user_id)
         if not link:
             return None
         
-        if title is not None:
-            link.title = title
-        if expires_at is not None:
-            link.expires_at = expires_at
-        if max_clicks is not None:
-            link.max_clicks = max_clicks
-        if is_active is not None:
-            link.is_active = is_active
-        if is_permanent is not None:
-            link.is_permanent = is_permanent
+        for field in ("title", "expires_at", "max_clicks"):
+            if field in changes:
+                setattr(link, field, changes[field])
+        for field in ("is_active", "is_permanent"):
+            if changes.get(field) is not None:
+                setattr(link, field, changes[field])
         
-        # Update tags
-        if tags is not None:
+        if "tags" in changes:
             link.tags.clear()
-            for tag_name in tags:
+            for tag_name in changes["tags"] or []:
                 tag = await self._get_or_create_tag(user_id, tag_name)
                 link.tags.append(tag)
         
         await self.db.commit()
+        await self._invalidate_cache(link.code)
         return await self._reload(link.id)
     
     async def _reload(self, link_id: UUID) -> Link:
@@ -209,9 +235,17 @@ class LinkService:
         if not link:
             return False
         
+        code, link_id = link.code, link.id
         await self.db.delete(link)
         await self.db.commit()
+        redis = await get_redis()
+        await redis.delete(link_cache_key(code), click_counter_key(link_id))
         return True
+    
+    async def _invalidate_cache(self, code: str) -> None:
+        """Remove cached redirect data so the next hit reads fresh state from DB."""
+        redis = await get_redis()
+        await redis.delete(link_cache_key(code))
     
     async def increment_clicks(self, link_id: UUID) -> None:
         """Increment click count for a link."""

@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.api.deps import get_current_user
 from app.schemas.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
@@ -10,6 +11,22 @@ from app.models.models import User
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+REFRESH_COOKIE = "refresh_token"
+# Browser sends the cookie only to auth endpoints, never to the rest of the API
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=token,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path=REFRESH_COOKIE_PATH,
+    )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -43,14 +60,7 @@ async def login(
         )
         
         # Set refresh token cookie
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=7 * 24 * 60 * 60,  # 7 days
-        )
+        _set_refresh_cookie(response, refresh_token)
         
         return TokenResponse(access_token=access_token, user=UserResponse.model_validate(user))
     except ValueError as e:
@@ -67,7 +77,7 @@ async def refresh(
     db: AsyncSession = Depends(get_db),
 ):
     """Refresh access token using refresh token cookie."""
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token = request.cookies.get(REFRESH_COOKIE)
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -81,14 +91,7 @@ async def refresh(
         access_token, new_refresh_token = await service.refresh(refresh_token, user_agent, ip)
         
         # Set new refresh token cookie
-        response.set_cookie(
-            key="refresh_token",
-            value=new_refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=7 * 24 * 60 * 60,
-        )
+        _set_refresh_cookie(response, new_refresh_token)
         
         return {"access_token": access_token, "token_type": "bearer"}
     except ValueError as e:
@@ -105,12 +108,18 @@ async def logout(
     db: AsyncSession = Depends(get_db),
 ):
     """Logout and revoke refresh token."""
-    refresh_token = request.cookies.get("refresh_token")
+    refresh_token = request.cookies.get(REFRESH_COOKIE)
     if refresh_token:
         service = AuthService(db)
         await service.logout(refresh_token)
     
-    response.delete_cookie("refresh_token")
+    response.delete_cookie(
+        REFRESH_COOKIE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+    )
     return {"message": "Logged out successfully"}
 
 
