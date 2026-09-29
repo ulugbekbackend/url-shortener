@@ -17,6 +17,10 @@ from app.models.models import Link, Tag, LinkTag
 from app.services.url_validator import validate_target_url
 
 
+# Redis stream the redirect writes click events to and the click worker consumes
+CLICK_STREAM = "clicks"
+
+
 def link_cache_key(code: str) -> str:
     """Redis key of the cached redirect data for a short code."""
     return f"link:{code}"

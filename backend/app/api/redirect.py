@@ -17,13 +17,17 @@ from app.core.database import async_session_factory
 from app.core.errors import AppError
 from app.core.redis import get_redis
 from app.core.security import verify_password
-from app.services.link_service import LinkService, click_counter_key, link_cache_key
+from app.services.link_service import (
+    CLICK_STREAM,
+    LinkService,
+    click_counter_key,
+    link_cache_key,
+)
 
 
 router = APIRouter(tags=["redirect"])
 
 CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,50}$")
-CLICK_STREAM = "clicks"
 CLICK_STREAM_MAXLEN = 100_000
 
 
