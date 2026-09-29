@@ -165,6 +165,7 @@ class TagResponse(BaseModel):
     id: UUID
     name: str
     created_at: datetime
+    link_count: int = 0
     
     model_config = {"from_attributes": True}
 
