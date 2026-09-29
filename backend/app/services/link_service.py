@@ -45,6 +45,12 @@ class LinkService:
         # Hash password if provided
         password_hash = hash_password(password) if password else None
         
+        # Resolve tags up front: lazy-loading link.tags is not allowed in async
+        tag_objs = []
+        if tags and user_id:
+            for tag_name in tags:
+                tag_objs.append(await self._get_or_create_tag(user_id, tag_name))
+        
         # Create link
         link = Link(
             user_id=user_id,
@@ -56,19 +62,11 @@ class LinkService:
             expires_at=expires_at,
             max_clicks=max_clicks,
             is_permanent=is_permanent,
+            tags=tag_objs,
         )
         self.db.add(link)
-        await self.db.flush()
-        
-        # Add tags if provided
-        if tags and user_id:
-            for tag_name in tags:
-                tag = await self._get_or_create_tag(user_id, tag_name)
-                link.tags.append(tag)
-        
         await self.db.commit()
-        await self.db.refresh(link)
-        return link
+        return await self._reload(link.id)
     
     async def _generate_unique_code(self, max_attempts: int = 5) -> str:
         """Generate a unique code with collision retry."""
@@ -193,8 +191,17 @@ class LinkService:
                 link.tags.append(tag)
         
         await self.db.commit()
-        await self.db.refresh(link)
-        return link
+        return await self._reload(link.id)
+    
+    async def _reload(self, link_id: UUID) -> Link:
+        """Re-read a link with tags eagerly loaded (refresh() would expire them)."""
+        result = await self.db.execute(
+            select(Link)
+            .where(Link.id == link_id)
+            .options(selectinload(Link.tags))
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one()
     
     async def delete_link(self, link_id: UUID, user_id: UUID) -> bool:
         """Delete a link."""
