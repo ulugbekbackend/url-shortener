@@ -51,4 +51,4 @@ redis-cli: ## Open Redis CLI
 	docker-compose exec redis redis-cli
 
 psql: ## Open PostgreSQL CLI
-	docker-compose exec postgres psql -U postgres -d linkly
+	docker-compose exec postgres psql -U postgres -d url_shortener
