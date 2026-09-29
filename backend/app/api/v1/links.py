@@ -3,16 +3,17 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.api.deps import get_current_user, get_current_user_optional, get_current_user_or_api_key
 from app.schemas.schemas import (
-    LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
+    BulkImportResponse, LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
 )
-from app.services.link_service import LinkService
+from app.services.bulk_service import MAX_FILE_BYTES, export_csv, import_links, parse_csv
+from app.services.link_service import LinkService, short_url
 from app.models.models import User, Link
-from app.core.config import settings
 
 
 router = APIRouter(prefix="/links", tags=["links"])
@@ -24,7 +25,7 @@ def link_to_response(link: Link) -> LinkResponse:
         id=link.id,
         code=link.code,
         original_url=link.original_url,
-        short_url=f"{settings.BASE_URL.rstrip('/')}/{link.code}",
+        short_url=short_url(link.code),
         title=link.title,
         favicon_url=link.favicon_url,
         tags=[tag.name for tag in link.tags] if link.tags else [],
@@ -119,6 +120,34 @@ async def list_links(
     )
 
 
+@router.post("/bulk", response_model=BulkImportResponse)
+async def bulk_create_links(
+    file: UploadFile = File(..., description="CSV with columns url, title, tags, custom_code"),
+    current_user: User = Depends(get_current_user_or_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create up to 500 links from a CSV file; invalid rows are reported, not fatal."""
+    rows = parse_csv(await file.read(MAX_FILE_BYTES + 1))
+    results = await import_links(LinkService(db), current_user.id, rows)
+    created = sum(1 for r in results if r.status == "success")
+    return BulkImportResponse(created=created, failed=len(results) - created, results=results)
+
+
+@router.get("/export")
+async def export_links(
+    current_user: User = Depends(get_current_user_or_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """Download all of the user's links as CSV."""
+    links = await LinkService(db).all_links(current_user.id)
+    return Response(
+        export_csv(links),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="links.csv"'},
+    )
+
+
+# Keep static paths (/bulk, /export) above /{link_id} so they are matched first
 @router.get("/{link_id}", response_model=LinkResponse)
 async def get_link(
     link_id: UUID,

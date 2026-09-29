@@ -1,6 +1,6 @@
 """Pydantic schemas for request/response validation."""
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, HttpUrl, Field, field_validator
 import re
@@ -113,6 +113,21 @@ class LinkResponse(BaseModel):
     updated_at: datetime
     
     model_config = {"from_attributes": True}
+
+
+class BulkRowResult(BaseModel):
+    row: int
+    url: str
+    status: Literal["success", "error"]
+    code: Optional[str] = None
+    short_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkImportResponse(BaseModel):
+    created: int
+    failed: int
+    results: List[BulkRowResult]
 
 
 class LinkListResponse(BaseModel):

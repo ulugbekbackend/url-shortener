@@ -21,6 +21,11 @@ from app.services.url_validator import validate_target_url
 CLICK_STREAM = "clicks"
 
 
+def short_url(code: str) -> str:
+    """Public short URL of a code."""
+    return f"{settings.BASE_URL.rstrip('/')}/{code}"
+
+
 def link_cache_key(code: str) -> str:
     """Redis key of the cached redirect data for a short code."""
     return f"link:{code}"
@@ -143,6 +148,16 @@ class LinkService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
+    async def all_links(self, user_id: UUID) -> List[Link]:
+        """Every link of a user, newest first (for export)."""
+        result = await self.db.execute(
+            select(Link)
+            .where(Link.user_id == user_id)
+            .options(selectinload(Link.tags))
+            .order_by(Link.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def list_links(
         self,
         user_id: UUID,
