@@ -3,10 +3,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.errors import AppError
+from app.core.redis import get_redis
 from app.core.security import (
     hash_password,
     verify_password,
@@ -15,7 +18,12 @@ from app.core.security import (
     decode_token,
     hash_token,
 )
-from app.models.models import User, RefreshToken
+from app.models.models import Link, RefreshToken, User
+from app.services.link_service import click_counter_key, link_cache_key
+
+
+def _email_taken() -> AppError:
+    return AppError(409, "EMAIL_TAKEN", "User with this email already exists")
 
 
 class AuthService:
@@ -48,23 +56,80 @@ class AuthService:
         if not user or not verify_password(password, user.password_hash):
             raise ValueError("Invalid email or password")
         
-        # Create tokens
-        access_token = create_access_token({"sub": str(user.id)})
-        refresh_token, token_hash = create_refresh_token({"sub": str(user.id)})
-        
-        # Store refresh token
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        refresh_token_obj = RefreshToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            user_agent=user_agent,
-            ip_address=ip,
-        )
-        self.db.add(refresh_token_obj)
+        access_token, refresh_token = self._issue_tokens(user.id, user_agent, ip)
         await self.db.commit()
-        
+
         return access_token, refresh_token, user
+
+    def _issue_tokens(
+        self, user_id: UUID, user_agent: Optional[str], ip: Optional[str]
+    ) -> tuple[str, str]:
+        """Create an access/refresh pair and stage the refresh token for storage."""
+        access_token = create_access_token({"sub": str(user_id)})
+        refresh_token, token_hash = create_refresh_token({"sub": str(user_id)})
+        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        self.db.add(
+            RefreshToken(
+                user_id=user_id,
+                token_hash=token_hash,
+                expires_at=expires_at,
+                user_agent=user_agent,
+                ip_address=ip,
+            )
+        )
+        return access_token, refresh_token
+
+    async def update_profile(
+        self, user: User, name: Optional[str], email: Optional[str]
+    ) -> User:
+        """Change name and/or email; email must stay unique."""
+        if name is not None:
+            user.name = name
+        if email is not None and email != user.email:
+            if await self.get_user_by_email(email):
+                raise _email_taken()
+            user.email = email
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise _email_taken()
+        await self.db.refresh(user)
+        return user
+
+    async def change_password(
+        self,
+        user: User,
+        current_password: str,
+        new_password: str,
+        user_agent: Optional[str] = None,
+        ip: Optional[str] = None,
+    ) -> tuple[str, str]:
+        """Set a new password, end every other session and return a fresh token pair."""
+        if not verify_password(current_password, user.password_hash):
+            raise AppError(400, "INVALID_PASSWORD", "Current password is incorrect")
+        user.password_hash = hash_password(new_password)
+        await self._revoke_all_user_tokens(user.id)
+        access_token, refresh_token = self._issue_tokens(user.id, user_agent, ip)
+        await self.db.commit()
+        return access_token, refresh_token
+
+    async def delete_account(self, user: User, password: str) -> None:
+        """Delete the user with all links, clicks, tags, keys and sessions."""
+        if not verify_password(password, user.password_hash):
+            raise AppError(400, "INVALID_PASSWORD", "Password is incorrect")
+        links = (
+            await self.db.execute(select(Link.id, Link.code).where(Link.user_id == user.id))
+        ).all()
+        # Bulk deletes let DB cascades remove clicks/tags instead of loading them into the ORM
+        await self.db.execute(delete(Link).where(Link.user_id == user.id))
+        await self.db.execute(delete(User).where(User.id == user.id))
+        await self.db.commit()
+        if links:
+            redis = await get_redis()
+            keys = [link_cache_key(code) for _, code in links]
+            keys += [click_counter_key(link_id) for link_id, _ in links]
+            await redis.delete(*keys)
     
     async def refresh(self, refresh_token: str, user_agent: Optional[str] = None, ip: Optional[str] = None) -> tuple[str, str]:
         """Refresh access token and rotate refresh token."""
