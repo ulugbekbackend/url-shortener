@@ -49,6 +49,23 @@ class TokenResponse(BaseModel):
 
 
 # Link schemas
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 50  # matches tags.name column
+
+
+def _clean_tags(tags: Optional[List[str]]) -> Optional[List[str]]:
+    """Strip, drop empties and duplicates, enforce count and length limits."""
+    if tags is None:
+        return None
+    cleaned = list(dict.fromkeys(t.strip() for t in tags if t.strip()))
+    if len(cleaned) > MAX_TAGS:
+        raise ValueError(f"At most {MAX_TAGS} tags are allowed")
+    for tag in cleaned:
+        if len(tag) > MAX_TAG_LENGTH:
+            raise ValueError(f"Tag '{tag[:20]}...' is longer than {MAX_TAG_LENGTH} characters")
+    return cleaned
+
+
 class LinkCreate(BaseModel):
     url: str = Field(max_length=2048)
     custom_code: Optional[str] = Field(None, min_length=3, max_length=50)
@@ -66,6 +83,11 @@ class LinkCreate(BaseModel):
             raise ValueError("URL must start with http:// or https://")
         return v
     
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return _clean_tags(v)
+
     @field_validator("custom_code")
     @classmethod
     def validate_custom_code(cls, v: Optional[str]) -> Optional[str]:
@@ -92,6 +114,11 @@ class LinkUpdate(BaseModel):
     max_clicks: Optional[int] = Field(None, gt=0)
     is_active: Optional[bool] = None
     is_permanent: Optional[bool] = None
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return _clean_tags(v)
 
 
 class LinkResponse(BaseModel):
