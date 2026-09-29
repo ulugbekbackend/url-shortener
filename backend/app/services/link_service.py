@@ -1,6 +1,6 @@
 """Link service - business logic for links."""
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Any, Optional, List
 from uuid import UUID
 import hashlib
 
@@ -195,33 +195,23 @@ class LinkService:
         self,
         link_id: UUID,
         user_id: UUID,
-        title: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        expires_at: Optional[datetime] = None,
-        max_clicks: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        is_permanent: Optional[bool] = None,
+        changes: dict[str, Any],
     ) -> Optional[Link]:
-        """Update a link."""
+        """Apply the fields present in `changes`; None clears a nullable field."""
         link = await self.get_link_by_id(link_id, user_id)
         if not link:
             return None
         
-        if title is not None:
-            link.title = title
-        if expires_at is not None:
-            link.expires_at = expires_at
-        if max_clicks is not None:
-            link.max_clicks = max_clicks
-        if is_active is not None:
-            link.is_active = is_active
-        if is_permanent is not None:
-            link.is_permanent = is_permanent
+        for field in ("title", "expires_at", "max_clicks"):
+            if field in changes:
+                setattr(link, field, changes[field])
+        for field in ("is_active", "is_permanent"):
+            if changes.get(field) is not None:
+                setattr(link, field, changes[field])
         
-        # Update tags
-        if tags is not None:
+        if "tags" in changes:
             link.tags.clear()
-            for tag_name in tags:
+            for tag_name in changes["tags"] or []:
                 tag = await self._get_or_create_tag(user_id, tag_name)
                 link.tags.append(tag)
         

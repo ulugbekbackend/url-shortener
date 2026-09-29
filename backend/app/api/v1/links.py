@@ -148,12 +148,7 @@ async def update_link(
     link = await service.update_link(
         link_id=link_id,
         user_id=current_user.id,
-        title=data.title,
-        tags=data.tags,
-        expires_at=data.expires_at,
-        max_clicks=data.max_clicks,
-        is_active=data.is_active,
-        is_permanent=data.is_permanent,
+        changes=data.model_dump(exclude_unset=True),
     )
     if not link:
         raise HTTPException(
