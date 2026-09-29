@@ -1,6 +1,9 @@
 """Core configuration module."""
-from typing import List
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Annotated, Any, List
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -25,19 +28,19 @@ class Settings(BaseSettings):
     WORKERS: int = 4
     
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/linkly"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/url_shortener"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # Security
-    SECRET_KEY: str = "change-this-in-production-use-openssl-rand-hex-32"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    BACKEND_CORS_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     
     # Rate Limiting
     RATE_LIMIT_ANONYMOUS: int = 100  # requests per hour
@@ -52,10 +55,10 @@ class Settings(BaseSettings):
     BASE_URL: str = "https://lnk.ly"
     
     # Blocked domains
-    BLOCKED_DOMAINS: List[str] = []
+    BLOCKED_DOMAINS: Annotated[List[str], NoDecode] = []
     
     # Reserved words for custom codes
-    RESERVED_CODES: List[str] = [
+    RESERVED_CODES: Annotated[List[str], NoDecode] = [
         "api", "docs", "health", "login", "admin", "register",
         "settings", "dashboard", "links", "auth", "static", "assets"
     ]
@@ -67,6 +70,17 @@ class Settings(BaseSettings):
     # Cache TTL
     LINK_CACHE_TTL: int = 86400  # 24 hours
     NEGATIVE_CACHE_TTL: int = 60  # 1 minute
+
+    @field_validator("BACKEND_CORS_ORIGINS", "BLOCKED_DOMAINS", "RESERVED_CODES", mode="before")
+    @classmethod
+    def split_list(cls, v: Any) -> Any:
+        """Accept JSON arrays or comma-separated strings from env."""
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                return json.loads(v)
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
 
 settings = Settings()
