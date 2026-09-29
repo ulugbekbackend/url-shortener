@@ -1,18 +1,19 @@
 """Main FastAPI application."""
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
+import orjson
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, RedirectResponse
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.database import engine
+from app.core.database import async_session_factory, engine
 from app.core.redis import get_redis, close_redis
 from app.api.v1 import auth, links, stats, api_keys
 from app.services.link_service import LinkService
-from app.core.database import async_session_factory
 
 
 @asynccontextmanager
@@ -81,7 +82,6 @@ async def redirect_link(code: str):
     cached = await redis.get(f"link:{code}")
     
     if cached:
-        import orjson
         data = orjson.loads(cached)
         if data.get("status") == "negative":
             raise HTTPException(status_code=404, detail="Link not found")
@@ -92,7 +92,6 @@ async def redirect_link(code: str):
         
         # Check expiry
         if data.get("expires_at"):
-            from datetime import datetime, timezone
             expires = datetime.fromisoformat(data["expires_at"])
             if expires < datetime.now(timezone.utc):
                 raise HTTPException(status_code=410, detail="Link has expired")
@@ -141,7 +140,6 @@ async def redirect_link(code: str):
             raise HTTPException(status_code=410, detail="Click limit reached")
         
         # Cache the link data
-        import orjson
         cache_data = {
             "url": link.original_url,
             "link_id": str(link.id),
@@ -170,6 +168,3 @@ async def redirect_link(code: str):
         
         status_code = 301 if link.is_permanent else 302
         return RedirectResponse(url=link.original_url, status_code=status_code)
-
-
-from datetime import datetime, timezone

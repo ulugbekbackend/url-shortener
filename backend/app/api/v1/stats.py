@@ -171,7 +171,7 @@ async def get_link_timeseries(
 @router.get("/links/{link_id}/breakdown", response_model=list[BreakdownItem])
 async def get_link_breakdown(
     link_id: UUID,
-    dimension: str = Query(..., regex="^(country|city|device|os|browser|referrer|utm_source)$"),
+    dimension: str = Query(..., pattern="^(country|city|device|os|browser|referrer|utm_source)$"),
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
     limit: int = Query(10, ge=1, le=50),
