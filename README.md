@@ -128,6 +128,17 @@ uv pip install -e ".[dev]"
 uvicorn app.main:app --reload
 ```
 
+#### Click worker
+Redirects only queue click events in a Redis stream; the worker enriches them and writes
+them to PostgreSQL. Analytics stay empty unless it is running.
+```bash
+cd backend
+python -m app.workers.click_worker
+```
+Several workers can run at once (they share a Redis consumer group). For country/city data,
+download the free [GeoLite2 City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)
+database and set `GEOLITE2_PATH`; without it geolocation is simply skipped.
+
 #### Frontend
 ```bash
 cd frontend

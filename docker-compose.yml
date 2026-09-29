@@ -1,5 +1,11 @@
 version: '3.8'
 
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/url_shortener
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: your-secret-key-change-in-production
+  BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -35,11 +41,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/url_shortener
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: your-secret-key-change-in-production
-      BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,6 +50,20 @@ services:
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: python -m app.workers.click_worker
 
   frontend:
     build:
