@@ -17,6 +17,12 @@ node_modules/
 dist/
 .env
 .env.local
+.env.production
+
+# Secrets
+*.pem
+*.key
+secrets/
 
 # IDE
 .vscode/
@@ -39,3 +45,8 @@ data/
 Thumbs.db
 .next/
 build/
+
+# Local docs / Claude
+docs/
+CLAUDE.local.md
+.claude/
