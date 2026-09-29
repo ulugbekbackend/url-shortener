@@ -21,12 +21,14 @@ class AppError(Exception):
         code: str,
         message: str,
         details: Optional[dict[str, Any]] = None,
+        headers: Optional[dict[str, str]] = None,
     ):
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        self.headers = headers
 
 
 def error_body(code: str, message: str, details: Optional[dict[str, Any]] = None) -> dict[str, Any]:
@@ -50,7 +52,9 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> ORJSONResponse:
         return ORJSONResponse(
-            error_body(exc.code, exc.message, exc.details), status_code=exc.status_code
+            error_body(exc.code, exc.message, exc.details),
+            status_code=exc.status_code,
+            headers=exc.headers,
         )
 
     @app.exception_handler(StarletteHTTPException)

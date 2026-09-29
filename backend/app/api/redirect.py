@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from app.core.config import settings
 from app.core.database import async_session_factory
 from app.core.errors import AppError
+from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce
 from app.core.redis import get_redis
 from app.core.security import verify_password
 from app.services.link_service import (
@@ -146,6 +147,9 @@ async def redirect_link(code: str, request: Request) -> Response:
 @router.post("/{code}/unlock", include_in_schema=False)
 async def unlock_link(code: str, request: Request, password: str = Form(...)) -> Response:
     """Check the password of a protected link and redirect on success."""
+    await enforce(
+        f"unlock:{code}:{client_ip(request)}", settings.RATE_LIMIT_UNLOCK, BRUTE_FORCE_WINDOW
+    )
     data = await _load_link(code)
     _ensure_available(data)
     password_hash = data.get("password_hash")

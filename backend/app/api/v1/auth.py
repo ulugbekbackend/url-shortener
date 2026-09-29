@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce
 from app.api.deps import get_current_user
 from app.schemas.schemas import (
     AccountDelete,
@@ -69,6 +70,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login and get access token."""
+    await enforce(f"login:{client_ip(request)}", settings.RATE_LIMIT_LOGIN, BRUTE_FORCE_WINDOW)
     service = AuthService(db)
     try:
         user_agent = request.headers.get("user-agent")
