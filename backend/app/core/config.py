@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Reserved words for custom codes
     RESERVED_CODES: Annotated[List[str], NoDecode] = [
         "api", "docs", "health", "login", "admin", "register",
-        "settings", "dashboard", "links", "auth", "static", "assets"
+        "settings", "dashboard", "links", "auth", "static", "assets", "redoc"
     ]
     
     # Click processing
