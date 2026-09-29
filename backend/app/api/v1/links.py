@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user, get_current_user_optional, get_current_user_or_api_key
+from app.api.deps import get_current_user_optional, get_current_user_or_api_key
 from app.schemas.schemas import (
     BulkImportResponse, LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
 )
@@ -100,7 +100,7 @@ async def list_links(
     sort: str = Query("created"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """List user's links with filters."""
@@ -154,7 +154,7 @@ async def export_links(
 @router.get("/{link_id}", response_model=LinkResponse)
 async def get_link(
     link_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Get a specific link."""
@@ -172,7 +172,7 @@ async def get_link(
 async def update_link(
     link_id: UUID,
     data: LinkUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a link."""
@@ -193,7 +193,7 @@ async def update_link(
 @router.delete("/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_link(
     link_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a link."""

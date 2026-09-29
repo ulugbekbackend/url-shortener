@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user_or_api_key
 from app.core.database import get_db
 from app.core.errors import AppError
 from app.models.models import Click, Link, User
@@ -176,7 +176,7 @@ async def _breakdown(
 async def get_overview(
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Account-wide totals; with a range, click metrics cover only that range."""
@@ -215,7 +215,7 @@ async def get_timeseries(
     to_date: Optional[datetime] = Query(None),
     interval: Interval = Query("day"),
     include_bots: bool = Query(False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Clicks over time across all of the user's links."""
@@ -230,7 +230,7 @@ async def get_breakdown(
     to_date: Optional[datetime] = Query(None),
     limit: int = Query(10, ge=1, le=50),
     include_bots: bool = Query(False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Top values of a dimension across all of the user's links."""
@@ -245,7 +245,7 @@ async def get_link_summary(
     link_id: UUID,
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Summary stats for a specific link (all time unless a range is given)."""
@@ -260,7 +260,7 @@ async def get_link_timeseries(
     to_date: Optional[datetime] = Query(None),
     interval: Interval = Query("day"),
     include_bots: bool = Query(False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Clicks over time for a link."""
@@ -277,7 +277,7 @@ async def get_link_breakdown(
     to_date: Optional[datetime] = Query(None),
     limit: int = Query(10, ge=1, le=50),
     include_bots: bool = Query(False),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
 ):
     """Top values of a dimension for a link."""
