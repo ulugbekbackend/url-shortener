@@ -14,7 +14,7 @@ from app.core.database import async_session_factory, engine
 from app.core.errors import register_error_handlers
 from app.core.redis import get_redis, close_redis
 from app.api.v1 import auth, links, stats, api_keys
-from app.services.link_service import LinkService
+from app.services.link_service import LinkService, click_counter_key, link_cache_key
 
 
 @asynccontextmanager
@@ -82,7 +82,7 @@ async def redirect_link(code: str):
     """Redirect short code to original URL."""
     # Check Redis cache first
     redis = await get_redis()
-    cached = await redis.get(f"link:{code}")
+    cached = await redis.get(link_cache_key(code))
     
     if cached:
         data = orjson.loads(cached)
@@ -117,7 +117,7 @@ async def redirect_link(code: str):
         )
         
         # Increment click counter
-        await redis.incr(f"clicks:{data.get('link_id', '')}")
+        await redis.incr(click_counter_key(data.get('link_id', '')))
         
         status_code = 301 if data.get("is_permanent") else 302
         return RedirectResponse(url=data["url"], status_code=status_code)
@@ -129,7 +129,7 @@ async def redirect_link(code: str):
         
         if not link:
             # Negative cache
-            await redis.setex(f"link:{code}", settings.NEGATIVE_CACHE_TTL, 
+            await redis.setex(link_cache_key(code), settings.NEGATIVE_CACHE_TTL, 
                             '{"status": "negative"}')
             raise HTTPException(status_code=404, detail="Link not found")
         
@@ -152,7 +152,7 @@ async def redirect_link(code: str):
             "max_clicks": link.max_clicks,
             "total_clicks": link.total_clicks,
         }
-        await redis.setex(f"link:{code}", settings.LINK_CACHE_TTL, orjson.dumps(cache_data))
+        await redis.setex(link_cache_key(code), settings.LINK_CACHE_TTL, orjson.dumps(cache_data))
         
         # Push click event
         await redis.xadd(
@@ -167,7 +167,7 @@ async def redirect_link(code: str):
         )
         
         # Increment click counter
-        await redis.incr(f"clicks:{link.id}")
+        await redis.incr(click_counter_key(link.id))
         
         status_code = 301 if link.is_permanent else 302
         return RedirectResponse(url=link.original_url, status_code=status_code)

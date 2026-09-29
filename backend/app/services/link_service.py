@@ -11,9 +11,20 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.errors import AppError
+from app.core.redis import get_redis
 from app.core.security import generate_code, hash_password
 from app.models.models import Link, Tag, LinkTag
 from app.services.url_validator import validate_target_url
+
+
+def link_cache_key(code: str) -> str:
+    """Redis key of the cached redirect data for a short code."""
+    return f"link:{code}"
+
+
+def click_counter_key(link_id: UUID | str) -> str:
+    """Redis key of the live click counter of a link."""
+    return f"clicks:{link_id}"
 
 
 def _is_reserved(code: str) -> bool:
@@ -86,6 +97,8 @@ class LinkService:
             # Lost a race for the same custom code
             await self.db.rollback()
             raise _code_taken(code)
+        # Drop a cached "not found" for this code
+        await self._invalidate_cache(code)
         return await self._reload(link.id)
     
     async def _generate_unique_code(self, max_attempts: int = 5) -> str:
@@ -213,6 +226,7 @@ class LinkService:
                 link.tags.append(tag)
         
         await self.db.commit()
+        await self._invalidate_cache(link.code)
         return await self._reload(link.id)
     
     async def _reload(self, link_id: UUID) -> Link:
@@ -231,9 +245,17 @@ class LinkService:
         if not link:
             return False
         
+        code, link_id = link.code, link.id
         await self.db.delete(link)
         await self.db.commit()
+        redis = await get_redis()
+        await redis.delete(link_cache_key(code), click_counter_key(link_id))
         return True
+    
+    async def _invalidate_cache(self, code: str) -> None:
+        """Remove cached redirect data so the next hit reads fresh state from DB."""
+        redis = await get_redis()
+        await redis.delete(link_cache_key(code))
     
     async def increment_clicks(self, link_id: UUID) -> None:
         """Increment click count for a link."""
