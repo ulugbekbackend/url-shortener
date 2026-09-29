@@ -5,13 +5,23 @@ from uuid import UUID
 import hashlib
 
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.errors import AppError
 from app.core.security import generate_code, hash_password
 from app.models.models import Link, Tag, LinkTag
 from app.services.url_validator import validate_target_url
+
+
+def _is_reserved(code: str) -> bool:
+    return code.lower() in {r.lower() for r in settings.RESERVED_CODES}
+
+
+def _code_taken(code: str) -> AppError:
+    return AppError(409, "CODE_TAKEN", f"Code '{code}' is already taken")
 
 
 class LinkService:
@@ -37,8 +47,10 @@ class LinkService:
         
         # Generate or validate code
         if custom_code:
-            if custom_code.lower() in [r.lower() for r in settings.RESERVED_CODES]:
+            if _is_reserved(custom_code):
                 raise ValueError(f"Code '{custom_code}' is reserved")
+            if await self.get_link_by_code(custom_code):
+                raise _code_taken(custom_code)
             code = custom_code
             is_custom = True
         else:
@@ -68,13 +80,20 @@ class LinkService:
             tags=tag_objs,
         )
         self.db.add(link)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # Lost a race for the same custom code
+            await self.db.rollback()
+            raise _code_taken(code)
         return await self._reload(link.id)
     
     async def _generate_unique_code(self, max_attempts: int = 5) -> str:
         """Generate a unique code with collision retry."""
         for _ in range(max_attempts):
             code = generate_code()
+            if _is_reserved(code):
+                continue
             existing = await self.get_link_by_code(code)
             if not existing:
                 return code
