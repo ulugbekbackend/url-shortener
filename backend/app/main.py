@@ -10,9 +10,10 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import register_error_handlers
+from app.core.rate_limit import rate_limit_middleware
 from app.core.redis import get_redis, close_redis
 from app.api import redirect
-from app.api.v1 import auth, links, stats, api_keys
+from app.api.v1 import auth, links, stats, api_keys, tags
 
 
 @asynccontextmanager
@@ -35,6 +36,9 @@ app = FastAPI(
 
 register_error_handlers(app)
 
+# Added before CORS so CORS stays outermost and 429 responses carry CORS headers
+app.middleware("http")(rate_limit_middleware)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -49,6 +53,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(links.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(api_keys.router, prefix="/api/v1")
+app.include_router(tags.router, prefix="/api/v1")
 
 
 @app.get("/health/live")

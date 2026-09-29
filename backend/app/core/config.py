@@ -48,7 +48,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_ANONYMOUS: int = 100  # requests per hour
     RATE_LIMIT_USER: int = 1000
     RATE_LIMIT_API_KEY: int = 10000
-    
+    RATE_LIMIT_WINDOW: int = 3600  # seconds, for the three limits above
+    # Brute-force guards, per client IP per 15 minutes
+    RATE_LIMIT_LOGIN: int = 10
+    RATE_LIMIT_UNLOCK: int = 10
+
     # GeoIP
     GEOLITE2_PATH: str = "/app/data/GeoLite2-City.mmdb"
     

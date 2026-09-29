@@ -4,8 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce
 from app.api.deps import get_current_user
-from app.schemas.schemas import UserRegister, UserLogin, UserResponse, TokenResponse
+from app.schemas.schemas import (
+    AccountDelete,
+    PasswordChange,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    UserUpdate,
+)
 from app.services.auth_service import AuthService
 from app.models.models import User
 
@@ -26,6 +35,16 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         samesite="lax",
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        REFRESH_COOKIE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
     )
 
 
@@ -51,6 +70,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     """Login and get access token."""
+    await enforce(f"login:{client_ip(request)}", settings.RATE_LIMIT_LOGIN, BRUTE_FORCE_WINDOW)
     service = AuthService(db)
     try:
         user_agent = request.headers.get("user-agent")
@@ -113,13 +133,7 @@ async def logout(
         service = AuthService(db)
         await service.logout(refresh_token)
     
-    response.delete_cookie(
-        REFRESH_COOKIE,
-        path=REFRESH_COOKIE_PATH,
-        httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite="lax",
-    )
+    _clear_refresh_cookie(response)
     return {"message": "Logged out successfully"}
 
 
@@ -127,3 +141,45 @@ async def logout(
 async def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info."""
     return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_me(
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the current user's name and/or email."""
+    return await AuthService(db).update_profile(current_user, data.name, data.email)
+
+
+@router.post("/change-password", response_model=TokenResponse)
+async def change_password(
+    data: PasswordChange,
+    response: Response,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change password; other sessions are signed out, this one gets new tokens."""
+    access_token, refresh_token = await AuthService(db).change_password(
+        current_user,
+        data.current_password,
+        data.new_password,
+        request.headers.get("user-agent"),
+        request.client.host if request.client else None,
+    )
+    _set_refresh_cookie(response, refresh_token)
+    return TokenResponse(access_token=access_token, user=UserResponse.model_validate(current_user))
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    data: AccountDelete,
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete the account and all its data (password required)."""
+    await AuthService(db).delete_account(current_user, data.password)
+    _clear_refresh_cookie(response)

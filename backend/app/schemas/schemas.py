@@ -1,6 +1,6 @@
 """Pydantic schemas for request/response validation."""
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, EmailStr, HttpUrl, Field, field_validator
 import re
@@ -28,6 +28,20 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[EmailStr] = None
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=100)
+
+
+class AccountDelete(BaseModel):
+    password: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -35,6 +49,23 @@ class TokenResponse(BaseModel):
 
 
 # Link schemas
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 50  # matches tags.name column
+
+
+def _clean_tags(tags: Optional[List[str]]) -> Optional[List[str]]:
+    """Strip, drop empties and duplicates, enforce count and length limits."""
+    if tags is None:
+        return None
+    cleaned = list(dict.fromkeys(t.strip() for t in tags if t.strip()))
+    if len(cleaned) > MAX_TAGS:
+        raise ValueError(f"At most {MAX_TAGS} tags are allowed")
+    for tag in cleaned:
+        if len(tag) > MAX_TAG_LENGTH:
+            raise ValueError(f"Tag '{tag[:20]}...' is longer than {MAX_TAG_LENGTH} characters")
+    return cleaned
+
+
 class LinkCreate(BaseModel):
     url: str = Field(max_length=2048)
     custom_code: Optional[str] = Field(None, min_length=3, max_length=50)
@@ -52,6 +83,11 @@ class LinkCreate(BaseModel):
             raise ValueError("URL must start with http:// or https://")
         return v
     
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return _clean_tags(v)
+
     @field_validator("custom_code")
     @classmethod
     def validate_custom_code(cls, v: Optional[str]) -> Optional[str]:
@@ -79,6 +115,11 @@ class LinkUpdate(BaseModel):
     is_active: Optional[bool] = None
     is_permanent: Optional[bool] = None
 
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        return _clean_tags(v)
+
 
 class LinkResponse(BaseModel):
     id: UUID
@@ -99,6 +140,21 @@ class LinkResponse(BaseModel):
     updated_at: datetime
     
     model_config = {"from_attributes": True}
+
+
+class BulkRowResult(BaseModel):
+    row: int
+    url: str
+    status: Literal["success", "error"]
+    code: Optional[str] = None
+    short_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BulkImportResponse(BaseModel):
+    created: int
+    failed: int
+    results: List[BulkRowResult]
 
 
 class LinkListResponse(BaseModel):
@@ -165,6 +221,7 @@ class TagResponse(BaseModel):
     id: UUID
     name: str
     created_at: datetime
+    link_count: int = 0
     
     model_config = {"from_attributes": True}
 
