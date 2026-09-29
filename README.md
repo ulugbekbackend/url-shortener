@@ -203,16 +203,20 @@ linkly/
 │   │       └── v1/
 │   ├── pyproject.toml
 │   └── Dockerfile
-├── src/                      # React application
-│   ├── main.tsx
-│   ├── App.tsx
-│   ├── routes/
-│   ├── components/
-│   ├── lib/
-│   ├── stores/
-│   └── types/
+├── frontend/                 # React application
+│   ├── src/
+│   │   ├── main.tsx
+│   │   ├── App.tsx
+│   │   ├── routes/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   ├── stores/
+│   │   └── types/
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.js
+│   └── Dockerfile
 ├── docker-compose.yml
-├── Dockerfile
 ├── Makefile
 └── README.md
 ```
