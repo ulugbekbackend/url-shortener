@@ -122,9 +122,12 @@ class Click(Base):
     __tablename__ = "clicks"
     __table_args__ = (
         Index("idx_clicks_link_clicked", "link_id", "clicked_at"),
+        UniqueConstraint("stream_id", name="uq_clicks_stream_id"),
     )
     
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Redis stream entry id; unique so a redelivered event is never stored twice
+    stream_id: Mapped[str] = mapped_column(String(32), nullable=False)
     link_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("links.id", ondelete="CASCADE"), nullable=False)
     clicked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     visitor_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
