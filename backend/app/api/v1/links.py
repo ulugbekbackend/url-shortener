@@ -1,6 +1,9 @@
 """Links API endpoints."""
-from typing import Optional
+import io
+from typing import Literal, Optional
 from uuid import UUID
+
+import segno
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import Response
@@ -201,3 +204,46 @@ async def delete_link(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
         )
+
+QR_COLOR = r"^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|transparent)$"
+QR_MEDIA_TYPES = {"png": "image/png", "svg": "image/svg+xml"}
+
+
+@router.get(
+    "/{link_id}/qr",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}, "image/svg+xml": {}}}},
+)
+async def get_link_qr(
+    link_id: UUID,
+    fmt: Literal["png", "svg"] = Query("png", alias="format"),
+    scale: int = Query(10, ge=1, le=40, description="Pixels per QR module"),
+    border: int = Query(4, ge=0, le=20, description="Quiet zone in modules"),
+    dark: str = Query("#000000", pattern=QR_COLOR),
+    light: str = Query("#ffffff", pattern=QR_COLOR),
+    current_user: User = Depends(get_current_user_or_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    """QR code of the link's short URL as PNG or SVG."""
+    link = await LinkService(db).get_link_by_id(link_id, current_user.id)
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
+        )
+
+    qr = segno.make(short_url(link.code), error="m")
+    buffer = io.BytesIO()
+    qr.save(
+        buffer,
+        kind=fmt,
+        scale=scale,
+        border=border,
+        dark=None if dark == "transparent" else dark,
+        light=None if light == "transparent" else light,
+    )
+    return Response(
+        buffer.getvalue(),
+        media_type=QR_MEDIA_TYPES[fmt],
+        headers={"Content-Disposition": f'inline; filename="qr-{link.code}.{fmt}"'},
+    )
