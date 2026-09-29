@@ -1,20 +1,175 @@
-"""Stats API endpoints."""
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+"""Stats API endpoints.
+
+`/stats/...` aggregates over all of the user's links, `/stats/links/{id}/...` over one link.
+Bots are left out of unique visitors, and out of timeseries and breakdowns unless
+`include_bots=true`.
+"""
+from datetime import datetime, timedelta, timezone
+from typing import Any, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, func, and_, case, cast, Date
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.schemas.schemas import StatsSummary, TimeSeriesPoint, BreakdownItem, OverviewStats
-from app.models.models import User, Link, Click, LinkDailyStats
+from app.core.database import get_db
+from app.core.errors import AppError
+from app.models.models import Click, Link, User
+from app.schemas.schemas import BreakdownItem, OverviewStats, StatsSummary, TimeSeriesPoint
 from app.services.link_service import LinkService
 
 
 router = APIRouter(prefix="/stats", tags=["stats"])
+
+Interval = Literal["hour", "day", "week"]
+Dimension = Literal["country", "city", "device", "os", "browser", "referrer", "utm_source"]
+
+DEFAULT_RANGE = timedelta(days=30)
+MAX_BUCKETS = 2000
+INTERVAL_STEP = {"hour": timedelta(hours=1), "day": timedelta(days=1), "week": timedelta(weeks=1)}
+DIMENSION_COLUMNS = {
+    "country": Click.country_code,
+    "city": Click.city,
+    "device": Click.device_type,
+    "os": Click.os,
+    "browser": Click.browser,
+    "referrer": Click.referrer_domain,
+    "utm_source": Click.utm_source,
+}
+
+
+def _utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Treat naive query datetimes as UTC."""
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _range(from_date: Optional[datetime], to_date: Optional[datetime]) -> tuple[datetime, datetime]:
+    """Resolve an optional range to concrete bounds, defaulting to the last 30 days."""
+    end = _utc(to_date) or datetime.now(timezone.utc)
+    start = _utc(from_date) or end - DEFAULT_RANGE
+    if start > end:
+        raise AppError(400, "INVALID_RANGE", "from_date must be before to_date")
+    return start, end
+
+
+def _period_filters(
+    from_date: Optional[datetime], to_date: Optional[datetime]
+) -> list[ColumnElement[bool]]:
+    filters = []
+    if from_date:
+        filters.append(Click.clicked_at >= _utc(from_date))
+    if to_date:
+        filters.append(Click.clicked_at <= _utc(to_date))
+    return filters
+
+
+def _user_scope(user: User) -> list[ColumnElement[bool]]:
+    return [Click.link_id.in_(select(Link.id).where(Link.user_id == user.id))]
+
+
+async def _link_scope(db: AsyncSession, link_id: UUID, user: User) -> list[ColumnElement[bool]]:
+    """Scope to one link, 404 if it does not belong to the user."""
+    if not await LinkService(db).get_link_by_id(link_id, user.id):
+        raise AppError(404, "LINK_NOT_FOUND", "Link not found")
+    return [Click.link_id == link_id]
+
+
+def _truncate(moment: datetime, interval: Interval) -> datetime:
+    """Python twin of Postgres date_trunc in UTC (weeks start on Monday)."""
+    moment = moment.astimezone(timezone.utc)
+    if interval == "hour":
+        return moment.replace(minute=0, second=0, microsecond=0)
+    day = moment.replace(hour=0, minute=0, second=0, microsecond=0)
+    return day - timedelta(days=day.weekday()) if interval == "week" else day
+
+
+async def _summary(db: AsyncSession, scope: list[ColumnElement[bool]]) -> StatsSummary:
+    row = (
+        await db.execute(
+            select(
+                func.count(),
+                func.count(func.distinct(Click.visitor_hash)).filter(~Click.is_bot),
+                func.count().filter(Click.is_bot),
+                func.min(Click.clicked_at),
+            ).where(*scope)
+        )
+    ).one()
+    total, unique, bots, first_click = row
+    days = max(1, (datetime.now(timezone.utc) - first_click).days) if first_click else 1
+    return StatsSummary(
+        total_clicks=total,
+        unique_visitors=unique,
+        bot_clicks=bots,
+        avg_clicks_per_day=round(total / days, 2) if total else 0,
+    )
+
+
+async def _timeseries(
+    db: AsyncSession,
+    scope: list[ColumnElement[bool]],
+    start: datetime,
+    end: datetime,
+    interval: Interval,
+    include_bots: bool,
+) -> list[TimeSeriesPoint]:
+    step = INTERVAL_STEP[interval]
+    first_bucket = _truncate(start, interval)
+    if (end - first_bucket) / step > MAX_BUCKETS:
+        raise AppError(400, "RANGE_TOO_LARGE", f"Range is too large for interval '{interval}'")
+
+    bucket = func.date_trunc(interval, Click.clicked_at, "UTC")
+    filters = [*scope, Click.clicked_at >= start, Click.clicked_at <= end]
+    if not include_bots:
+        filters.append(~Click.is_bot)
+    rows = (
+        await db.execute(
+            select(bucket, func.count(), func.count(func.distinct(Click.visitor_hash)))
+            .where(*filters)
+            .group_by(bucket)
+        )
+    ).all()
+    by_bucket: dict[datetime, Any] = {period: (clicks, unique) for period, clicks, unique in rows}
+
+    # Emit every bucket so charts show gaps as zeros
+    points = []
+    current = first_bucket
+    while current <= end:
+        clicks, unique = by_bucket.get(current, (0, 0))
+        points.append(TimeSeriesPoint(date=current, clicks=clicks, unique_visitors=unique))
+        current += step
+    return points
+
+
+async def _breakdown(
+    db: AsyncSession,
+    scope: list[ColumnElement[bool]],
+    dimension: Dimension,
+    filters: list[ColumnElement[bool]],
+    limit: int,
+    include_bots: bool,
+) -> list[BreakdownItem]:
+    column = DIMENSION_COLUMNS[dimension]
+    conditions = [*scope, *filters, column.isnot(None)]
+    if not include_bots:
+        conditions.append(~Click.is_bot)
+    count = func.count()
+    rows = (
+        await db.execute(
+            # The window total is computed before LIMIT, so percentages cover all values
+            select(column, count, func.sum(count).over())
+            .where(*conditions)
+            .group_by(column)
+            .order_by(count.desc())
+            .limit(limit)
+        )
+    ).all()
+    return [
+        BreakdownItem(name=name, count=cnt, percentage=round(cnt / total * 100, 1))
+        for name, cnt, total in rows
+    ]
 
 
 @router.get("/overview", response_model=OverviewStats)
@@ -24,46 +179,64 @@ async def get_overview(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get account-wide overview stats."""
-    # Count links
-    link_count_result = await db.execute(
+    """Account-wide totals; with a range, click metrics cover only that range."""
+    scope = _user_scope(current_user)
+    period = _period_filters(from_date, to_date)
+
+    total_links = await db.scalar(
         select(func.count(Link.id)).where(Link.user_id == current_user.id)
     )
-    total_links = link_count_result.scalar() or 0
-    
-    # Total clicks
-    clicks_result = await db.execute(
-        select(func.sum(Link.total_clicks)).where(Link.user_id == current_user.id)
-    )
-    total_clicks = clicks_result.scalar() or 0
-    
-    # Clicks today
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_result = await db.execute(
-        select(func.count(Click.id))
-        .join(Link)
-        .where(
-            and_(
-                Link.user_id == current_user.id,
-                Click.clicked_at >= today_start,
+    if period:
+        total_clicks = await db.scalar(select(func.count()).where(*scope, *period))
+    else:
+        total_clicks = await db.scalar(
+            select(func.coalesce(func.sum(Link.total_clicks), 0)).where(
+                Link.user_id == current_user.id
             )
         )
+    today_start = _truncate(datetime.now(timezone.utc), "day")
+    clicks_today = await db.scalar(
+        select(func.count()).where(*scope, Click.clicked_at >= today_start)
     )
-    clicks_today = today_result.scalar() or 0
-    
-    # Unique visitors (simplified)
-    unique_result = await db.execute(
-        select(func.count(func.distinct(Click.visitor_hash)))
-        .join(Link)
-        .where(Link.user_id == current_user.id)
+    unique_visitors = await db.scalar(
+        select(func.count(func.distinct(Click.visitor_hash))).where(*scope, *period, ~Click.is_bot)
     )
-    unique_visitors = unique_result.scalar() or 0
-    
     return OverviewStats(
-        total_links=total_links,
-        total_clicks=total_clicks,
-        clicks_today=clicks_today,
-        unique_visitors=unique_visitors,
+        total_links=total_links or 0,
+        total_clicks=total_clicks or 0,
+        clicks_today=clicks_today or 0,
+        unique_visitors=unique_visitors or 0,
+    )
+
+
+@router.get("/timeseries", response_model=list[TimeSeriesPoint])
+async def get_timeseries(
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
+    interval: Interval = Query("day"),
+    include_bots: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clicks over time across all of the user's links."""
+    start, end = _range(from_date, to_date)
+    return await _timeseries(db, _user_scope(current_user), start, end, interval, include_bots)
+
+
+@router.get("/breakdown", response_model=list[BreakdownItem])
+async def get_breakdown(
+    dimension: Dimension = Query(...),
+    from_date: Optional[datetime] = Query(None),
+    to_date: Optional[datetime] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    include_bots: bool = Query(False),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top values of a dimension across all of the user's links."""
+    return await _breakdown(
+        db, _user_scope(current_user), dimension, _period_filters(from_date, to_date),
+        limit, include_bots,
     )
 
 
@@ -75,43 +248,9 @@ async def get_link_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get summary stats for a specific link."""
-    service = LinkService(db)
-    link = await service.get_link_by_id(link_id, current_user.id)
-    if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
-        )
-    
-    # Build query
-    query = select(Click).where(Click.link_id == link_id)
-    if from_date:
-        query = query.where(Click.clicked_at >= from_date)
-    if to_date:
-        query = query.where(Click.clicked_at <= to_date)
-    
-    result = await db.execute(query)
-    clicks = result.scalars().all()
-    
-    total = len(clicks)
-    unique = len(set(c.visitor_hash for c in clicks if c.visitor_hash))
-    bots = sum(1 for c in clicks if c.is_bot)
-    
-    # Calculate avg per day
-    if clicks:
-        first_click = min(c.clicked_at for c in clicks)
-        days = max(1, (datetime.now(timezone.utc) - first_click).days)
-        avg_per_day = total / days
-    else:
-        avg_per_day = 0
-    
-    return StatsSummary(
-        total_clicks=total,
-        unique_visitors=unique,
-        bot_clicks=bots,
-        avg_clicks_per_day=round(avg_per_day, 2),
-    )
+    """Summary stats for a specific link (all time unless a range is given)."""
+    scope = await _link_scope(db, link_id, current_user)
+    return await _summary(db, [*scope, *_period_filters(from_date, to_date)])
 
 
 @router.get("/links/{link_id}/timeseries", response_model=list[TimeSeriesPoint])
@@ -119,119 +258,30 @@ async def get_link_timeseries(
     link_id: UUID,
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
-    interval: str = Query("day"),
+    interval: Interval = Query("day"),
+    include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get timeseries data for a link."""
-    service = LinkService(db)
-    link = await service.get_link_by_id(link_id, current_user.id)
-    if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
-        )
-    
-    # Default date range
-    if not to_date:
-        to_date = datetime.now(timezone.utc)
-    if not from_date:
-        from_date = to_date - timedelta(days=30)
-    
-    # Query clicks grouped by date
-    date_trunc = func.date_trunc(interval, Click.clicked_at)
-    result = await db.execute(
-        select(
-            date_trunc.label("period"),
-            func.count(Click.id).label("clicks"),
-            func.count(func.distinct(Click.visitor_hash)).label("unique"),
-        )
-        .where(
-            and_(
-                Click.link_id == link_id,
-                Click.clicked_at >= from_date,
-                Click.clicked_at <= to_date,
-            )
-        )
-        .group_by(date_trunc)
-        .order_by(date_trunc)
-    )
-    
-    rows = result.all()
-    return [
-        TimeSeriesPoint(
-            date=row.period,
-            clicks=row.clicks,
-            unique_visitors=row.unique,
-        )
-        for row in rows
-    ]
+    """Clicks over time for a link."""
+    scope = await _link_scope(db, link_id, current_user)
+    start, end = _range(from_date, to_date)
+    return await _timeseries(db, scope, start, end, interval, include_bots)
 
 
 @router.get("/links/{link_id}/breakdown", response_model=list[BreakdownItem])
 async def get_link_breakdown(
     link_id: UUID,
-    dimension: str = Query(..., pattern="^(country|city|device|os|browser|referrer|utm_source)$"),
+    dimension: Dimension = Query(...),
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None),
     limit: int = Query(10, ge=1, le=50),
+    include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get breakdown stats for a link by dimension."""
-    service = LinkService(db)
-    link = await service.get_link_by_id(link_id, current_user.id)
-    if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
-        )
-    
-    # Map dimension to column
-    dimension_map = {
-        "country": Click.country_code,
-        "city": Click.city,
-        "device": Click.device_type,
-        "os": Click.os,
-        "browser": Click.browser,
-        "referrer": Click.referrer_domain,
-        "utm_source": Click.utm_source,
-    }
-    column = dimension_map.get(dimension)
-    if not column:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "INVALID_DIMENSION", "message": f"Invalid dimension: {dimension}"},
-        )
-    
-    # Build query
-    query = select(
-        column.label("name"),
-        func.count(Click.id).label("count"),
-    ).where(
-        and_(
-            Click.link_id == link_id,
-            column.isnot(None),
-        )
+    """Top values of a dimension for a link."""
+    scope = await _link_scope(db, link_id, current_user)
+    return await _breakdown(
+        db, scope, dimension, _period_filters(from_date, to_date), limit, include_bots
     )
-    
-    if from_date:
-        query = query.where(Click.clicked_at >= from_date)
-    if to_date:
-        query = query.where(Click.clicked_at <= to_date)
-    
-    query = query.group_by(column).order_by(func.count(Click.id).desc()).limit(limit)
-    
-    result = await db.execute(query)
-    rows = result.all()
-    
-    total = sum(row.count for row in rows) if rows else 1
-    
-    return [
-        BreakdownItem(
-            name=row.name or "Unknown",
-            count=row.count,
-            percentage=round((row.count / total) * 100, 1) if total > 0 else 0,
-        )
-        for row in rows
-    ]
