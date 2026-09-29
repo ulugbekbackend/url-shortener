@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import async_session_factory, engine
+from app.core.errors import register_error_handlers
 from app.core.redis import get_redis, close_redis
 from app.api.v1 import auth, links, stats, api_keys
 from app.services.link_service import LinkService
@@ -33,6 +34,8 @@ app = FastAPI(
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
+
+register_error_handlers(app)
 
 # CORS
 app.add_middleware(
