@@ -24,7 +24,7 @@ def link_to_response(link: Link) -> LinkResponse:
         id=link.id,
         code=link.code,
         original_url=link.original_url,
-        short_url=f"{settings.SHORT_DOMAIN}/{link.code}",
+        short_url=f"{settings.BASE_URL.rstrip('/')}/{link.code}",
         title=link.title,
         favicon_url=link.favicon_url,
         tags=[tag.name for tag in link.tags] if link.tags else [],
