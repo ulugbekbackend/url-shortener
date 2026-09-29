@@ -1,11 +1,10 @@
 """SQLAlchemy models."""
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 import uuid
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, BigInteger,
-    String, Text, UniqueConstraint
+    BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -70,7 +69,6 @@ class Link(Base):
     __tablename__ = "links"
     __table_args__ = (
         Index("idx_links_user_created", "user_id", "created_at"),
-        Index("idx_links_code", "code", unique=True),
     )
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -148,9 +146,6 @@ class Click(Base):
 class LinkDailyStats(Base):
     """Daily aggregated stats for links."""
     __tablename__ = "link_daily_stats"
-    __table_args__ = (
-        Index("idx_daily_stats_link_day", "link_id", "day"),
-    )
     
     link_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("links.id", ondelete="CASCADE"), primary_key=True)
     day: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
