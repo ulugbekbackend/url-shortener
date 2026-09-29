@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.config import settings
 from app.core.security import generate_code, hash_password
 from app.models.models import Link, Tag, LinkTag
+from app.services.url_validator import validate_target_url
 
 
 class LinkService:
@@ -32,6 +33,8 @@ class LinkService:
         is_permanent: bool = False,
     ) -> Link:
         """Create a new link."""
+        validate_target_url(url)
+        
         # Generate or validate code
         if custom_code:
             if custom_code.lower() in [r.lower() for r in settings.RESERVED_CODES]:
