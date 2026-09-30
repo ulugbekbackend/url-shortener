@@ -49,12 +49,12 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
+async def register(data: UserRegister, db: AsyncSession = Depends(get_db)) -> UserResponse:
     """Register a new user."""
     service = AuthService(db)
     try:
         user = await service.register(data.email, data.password, data.name)
-        return user
+        return UserResponse.model_validate(user)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -68,7 +68,7 @@ async def login(
     request: Request,
     data: UserLogin,
     db: AsyncSession = Depends(get_db),
-):
+) -> TokenResponse:
     """Login and get access token."""
     await enforce(f"login:{client_ip(request)}", settings.RATE_LIMIT_LOGIN, BRUTE_FORCE_WINDOW)
     service = AuthService(db)
@@ -95,7 +95,7 @@ async def refresh(
     response: Response,
     request: Request,
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, str]:
     """Refresh access token using refresh token cookie."""
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if not refresh_token:
@@ -126,7 +126,7 @@ async def logout(
     response: Response,
     request: Request,
     db: AsyncSession = Depends(get_db),
-):
+) -> dict[str, str]:
     """Logout and revoke refresh token."""
     refresh_token = request.cookies.get(REFRESH_COOKIE)
     if refresh_token:
@@ -138,9 +138,9 @@ async def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Get current user info."""
-    return current_user
+    return UserResponse.model_validate(current_user)
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -148,9 +148,10 @@ async def update_me(
     data: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> UserResponse:
     """Update the current user's name and/or email."""
-    return await AuthService(db).update_profile(current_user, data.name, data.email)
+    user = await AuthService(db).update_profile(current_user, data.name, data.email)
+    return UserResponse.model_validate(user)
 
 
 @router.post("/change-password", response_model=TokenResponse)
@@ -160,7 +161,7 @@ async def change_password(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> TokenResponse:
     """Change password; other sessions are signed out, this one gets new tokens."""
     access_token, refresh_token = await AuthService(db).change_password(
         current_user,
@@ -179,7 +180,7 @@ async def delete_me(
     response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> None:
     """Permanently delete the account and all its data (password required)."""
     await AuthService(db).delete_account(current_user, data.password)
     _clear_refresh_cookie(response)

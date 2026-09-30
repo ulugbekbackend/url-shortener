@@ -56,13 +56,13 @@ app.include_router(tags.router, prefix="/api/v1")
 
 
 @app.get("/health/live")
-async def health_live():
+async def health_live() -> dict[str, str]:
     """Liveness check."""
     return {"status": "ok"}
 
 
 @app.get("/health/ready")
-async def health_ready():
+async def health_ready() -> dict[str, str]:
     """Readiness check - verify DB and Redis."""
     try:
         redis = await get_redis()

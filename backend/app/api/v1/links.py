@@ -53,7 +53,7 @@ async def create_link(
     data: LinkCreate,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Create a new link (authenticated)."""
     service = LinkService(db)
     try:
@@ -80,7 +80,7 @@ async def create_link(
 async def create_link_anonymous(
     data: LinkAnonymous,
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Create a new link anonymously (rate limited)."""
     service = LinkService(db)
     try:
@@ -106,7 +106,7 @@ async def list_links(
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkListResponse:
     """List user's links with filters."""
     service = LinkService(db)
     links, total = await service.list_links(
@@ -132,7 +132,7 @@ async def bulk_create_links(
     file: UploadFile = File(..., description="CSV with columns url, title, tags, custom_code"),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> BulkImportResponse:
     """Create up to 500 links from a CSV file; invalid rows are reported, not fatal."""
     rows = parse_csv(await file.read(MAX_FILE_BYTES + 1))
     results = await import_links(LinkService(db), current_user.id, rows)
@@ -144,7 +144,7 @@ async def bulk_create_links(
 async def export_links(
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> Response:
     """Download all of the user's links as CSV."""
     links = await LinkService(db).all_links(current_user.id)
     return Response(
@@ -160,7 +160,7 @@ async def get_link(
     link_id: UUID,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Get a specific link."""
     service = LinkService(db)
     link = await service.get_link_by_id(link_id, current_user.id)
@@ -178,7 +178,7 @@ async def update_link(
     data: LinkUpdate,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Update a link."""
     service = LinkService(db)
     link = await service.update_link(
@@ -199,7 +199,7 @@ async def delete_link(
     link_id: UUID,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> None:
     """Delete a link."""
     service = LinkService(db)
     deleted = await service.delete_link(link_id, current_user.id)
@@ -228,7 +228,7 @@ async def get_link_qr(
     light: str = Query("#ffffff", pattern=QR_COLOR),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> Response:
     """QR code of the link's short URL as PNG or SVG."""
     link = await LinkService(db).get_link_by_id(link_id, current_user.id)
     if not link:

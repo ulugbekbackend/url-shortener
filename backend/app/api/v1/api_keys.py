@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[ApiKeyResponse]:
     """List user's API keys."""
     result = await db.execute(
         select(ApiKey).where(ApiKey.user_id == current_user.id).order_by(ApiKey.created_at.desc())
@@ -34,7 +34,7 @@ async def create_api_key(
     data: ApiKeyCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> ApiKeyCreatedResponse:
     """Create a new API key (full key shown only once)."""
     full_key, prefix, key_hash = generate_api_key()
 
@@ -59,7 +59,7 @@ async def revoke_api_key(
     key_id: UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> None:
     """Revoke an API key."""
     result = await db.execute(
         select(ApiKey).where(

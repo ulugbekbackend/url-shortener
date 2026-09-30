@@ -2,7 +2,7 @@
 
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -237,10 +237,10 @@ class PasswordUnlock(BaseModel):
 
 # Error response
 class ErrorResponse(BaseModel):
-    error: dict
+    error: dict[str, Any]
 
 
 class ErrorDetail(BaseModel):
     code: str
     message: str
-    details: dict | None = None
+    details: dict[str, Any] | None = None

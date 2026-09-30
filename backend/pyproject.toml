@@ -57,6 +57,11 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+# user-agents ships no type information
+module = ["user_agents", "user_agents.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

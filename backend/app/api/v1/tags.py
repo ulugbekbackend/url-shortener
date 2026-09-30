@@ -16,7 +16,7 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 async def list_tags(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TagResponse]:
     """List the user's tags with the number of links using each, most used first."""
     link_count = func.count(LinkTag.link_id)
     rows = (

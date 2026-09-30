@@ -178,7 +178,7 @@ async def get_overview(
     to_date: datetime | None = Query(None),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> OverviewStats:
     """Account-wide totals; with a range, click metrics cover only that range."""
     scope = _user_scope(current_user)
     period = _period_filters(from_date, to_date)
@@ -217,7 +217,7 @@ async def get_timeseries(
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TimeSeriesPoint]:
     """Clicks over time across all of the user's links."""
     start, end = _range(from_date, to_date)
     return await _timeseries(db, _user_scope(current_user), start, end, interval, include_bots)
@@ -232,7 +232,7 @@ async def get_breakdown(
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[BreakdownItem]:
     """Top values of a dimension across all of the user's links."""
     return await _breakdown(
         db,
@@ -251,7 +251,7 @@ async def get_link_summary(
     to_date: datetime | None = Query(None),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> StatsSummary:
     """Summary stats for a specific link (all time unless a range is given)."""
     scope = await _link_scope(db, link_id, current_user)
     return await _summary(db, [*scope, *_period_filters(from_date, to_date)])
@@ -266,7 +266,7 @@ async def get_link_timeseries(
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TimeSeriesPoint]:
     """Clicks over time for a link."""
     scope = await _link_scope(db, link_id, current_user)
     start, end = _range(from_date, to_date)
@@ -283,7 +283,7 @@ async def get_link_breakdown(
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[BreakdownItem]:
     """Top values of a dimension for a link."""
     scope = await _link_scope(db, link_id, current_user)
     return await _breakdown(

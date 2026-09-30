@@ -14,8 +14,9 @@ import os
 import signal
 import socket
 from collections import Counter
+from collections.abc import Sequence
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
@@ -60,16 +61,18 @@ async def read_batch(redis: Redis, consumer: str) -> list[Event]:
         count=settings.CLICK_BATCH_SIZE,
     )
     if claimed:
-        return claimed
+        return cast(list[Event], claimed)
 
-    response = await redis.xreadgroup(
+    # redis-py types mix RESP2 and RESP3 reply shapes; this client speaks RESP2
+    response: Any = await redis.xreadgroup(
         GROUP,
         consumer,
         {CLICK_STREAM: ">"},
         count=settings.CLICK_BATCH_SIZE,
         block=settings.CLICK_BATCH_TIMEOUT * 1000,
     )
-    return response[0][1] if response else []
+    # RESP2 reply: [[stream_name, [(event_id, fields), ...]]]
+    return cast(list[Event], response[0][1]) if response else []
 
 
 async def store_batch(session: AsyncSession, events: list[Event], geo: GeoLookup) -> int:
@@ -106,7 +109,7 @@ async def store_batch(session: AsyncSession, events: list[Event], geo: GeoLookup
     return len(inserted)
 
 
-async def _refresh_daily_stats(session: AsyncSession, inserted: list[Any]) -> None:
+async def _refresh_daily_stats(session: AsyncSession, inserted: Sequence[Any]) -> None:
     """Recompute the touched (link, UTC day) rows from `clicks`, so unique counts stay exact."""
     link_ids = {link_id for link_id, _ in inserted}
     first_day = min(clicked_at for _, clicked_at in inserted).replace(
