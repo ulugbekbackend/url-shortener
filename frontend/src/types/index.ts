@@ -93,22 +93,6 @@ export interface QrOptions {
   light?: string;
 }
 
-export interface ClickEvent {
-  id: string;
-  linkId: string;
-  clickedAt: string;
-  countryCode: string | null;
-  city: string | null;
-  deviceType: "desktop" | "mobile" | "tablet" | null;
-  os: string | null;
-  browser: string | null;
-  referrerDomain: string | null;
-  isBot: boolean;
-  utmSource: string | null;
-  utmMedium: string | null;
-  utmCampaign: string | null;
-}
-
 export interface TimeSeriesPoint {
   date: string;
   clicks: number;
