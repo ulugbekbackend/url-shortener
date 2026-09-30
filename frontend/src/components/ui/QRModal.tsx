@@ -1,95 +1,56 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X, Download, QrCode } from "lucide-react";
+import { api } from "../../lib/api";
+import { errorMessage } from "../../lib/http";
+import { useDebouncedValue } from "../../lib/hooks";
+import { displayUrl, downloadBlob } from "../../lib/utils";
+import { useToastStore } from "../../stores/toastStore";
+import type { Link, QrOptions } from "../../types";
+import { Spinner } from "./Spinner";
 
 interface QRModalProps {
-  url: string;
-  code: string;
+  link: Pick<Link, "id" | "code" | "shortUrl">;
   onClose: () => void;
 }
 
-export function QRModal({ code, onClose }: QRModalProps) {
+const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+export function QRModal({ link, onClose }: QRModalProps) {
+  const addToast = useToastStore((s) => s.addToast);
   const [fgColor, setFgColor] = useState("#1e40af");
   const [bgColor, setBgColor] = useState("#ffffff");
-  const [size, setSize] = useState(256);
+  const [scale, setScale] = useState(8);
 
-  // Generate a simple QR-like pattern using SVG
-  const generateQRPattern = () => {
-    const modules = 21;
-    const cellSize = size / modules;
-    const cells: { x: number; y: number }[] = [];
+  // Colors are typed by hand too; only ask the server once they are valid and settled
+  const current = useMemo(
+    () => ({ scale, dark: fgColor, light: bgColor }),
+    [scale, fgColor, bgColor],
+  );
+  const options = useDebouncedValue<Omit<QrOptions, "format">>(current);
+  const colorsValid = HEX_COLOR.test(fgColor) && HEX_COLOR.test(bgColor);
 
-    // Simple deterministic pattern based on the code string
-    const seed = code.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  // A data: URL needs no cleanup, unlike an object URL
+  const {
+    data: previewUrl,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["qr", link.id, options],
+    queryFn: async () => {
+      const svg = await api.links.qr(link.id, { format: "svg", ...options });
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(await svg.text())}`;
+    },
+    enabled: HEX_COLOR.test(options.dark ?? "") && HEX_COLOR.test(options.light ?? ""),
+  });
 
-    for (let row = 0; row < modules; row++) {
-      for (let col = 0; col < modules; col++) {
-        // Finder patterns (top-left, top-right, bottom-left)
-        const isFinderTL = row < 7 && col < 7;
-        const isFinderTR = row < 7 && col >= modules - 7;
-        const isFinderBL = row >= modules - 7 && col < 7;
-
-        if (isFinderTL || isFinderTR || isFinderBL) {
-          // Finder pattern logic
-          const localRow = isFinderTL ? row : isFinderBL ? row - (modules - 7) : row;
-          const localCol = isFinderTL ? col : isFinderTR ? col - (modules - 7) : col;
-
-          if (
-            localRow === 0 ||
-            localRow === 6 ||
-            localCol === 0 ||
-            localCol === 6 ||
-            (localRow >= 2 && localRow <= 4 && localCol >= 2 && localCol <= 4)
-          ) {
-            cells.push({ x: col * cellSize, y: row * cellSize });
-          }
-        } else {
-          // Data modules - pseudo-random based on seed
-          const hash = (seed * (row + 1) * (col + 1) + row * 31 + col * 17) % 100;
-          if (hash < 45) {
-            cells.push({ x: col * cellSize, y: row * cellSize });
-          }
-        }
-      }
+  const download = async (format: QrOptions["format"]) => {
+    try {
+      const blob = await api.links.qr(link.id, { format, scale, dark: fgColor, light: bgColor });
+      downloadBlob(blob, `qr-${link.code}.${format}`);
+    } catch (err) {
+      addToast(errorMessage(err, "Could not download the QR code"), "error");
     }
-    return { cells, cellSize };
-  };
-
-  const { cells, cellSize } = generateQRPattern();
-
-  const handleDownloadSVG = () => {
-    const svg = document.getElementById("qr-svg");
-    if (!svg) return;
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([svgData], { type: "image/svg+xml" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `qr-${code}.svg`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
-
-  const handleDownloadPNG = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = fgColor;
-    cells.forEach(({ x, y }) => {
-      ctx.fillRect(x, y, cellSize, cellSize);
-    });
-
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `qr-${code}.png`;
-      link.click();
-      URL.revokeObjectURL(link.href);
-    });
   };
 
   return (
@@ -105,27 +66,26 @@ export function QRModal({ code, onClose }: QRModalProps) {
           <h2 className="flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-white">
             <QrCode size={20} /> QR Code
           </h2>
-          <button onClick={onClose} className="btn-ghost !p-2">
+          <button onClick={onClose} className="btn-ghost !p-2" aria-label="Close">
             <X size={18} />
           </button>
         </div>
 
         {/* QR Preview */}
-        <div className="flex justify-center mb-6">
-          <div className="rounded-xl p-4 shadow-inner" style={{ backgroundColor: bgColor }}>
-            <svg
-              id="qr-svg"
-              width={size}
-              height={size}
-              viewBox={`0 0 ${size} ${size}`}
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <rect width={size} height={size} fill={bgColor} />
-              {cells.map(({ x, y }, i) => (
-                <rect key={i} x={x} y={y} width={cellSize} height={cellSize} fill={fgColor} />
-              ))}
-            </svg>
-          </div>
+        <div className="mb-6 flex min-h-64 items-center justify-center">
+          {error ? (
+            <p className="text-sm text-red-600 dark:text-red-400">
+              {errorMessage(error, "Could not load the QR code")}
+            </p>
+          ) : isLoading || !previewUrl ? (
+            <Spinner />
+          ) : (
+            <img
+              src={previewUrl}
+              alt={`QR code for ${link.shortUrl}`}
+              className="max-h-80 max-w-full rounded-xl shadow-inner"
+            />
+          )}
         </div>
 
         {/* Controls */}
@@ -138,7 +98,7 @@ export function QRModal({ code, onClose }: QRModalProps) {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  value={fgColor}
+                  value={HEX_COLOR.test(fgColor) ? fgColor : "#000000"}
                   onChange={(e) => setFgColor(e.target.value)}
                   className="h-9 w-9 cursor-pointer rounded border border-surface-300 dark:border-surface-600"
                 />
@@ -157,7 +117,7 @@ export function QRModal({ code, onClose }: QRModalProps) {
               <div className="flex items-center gap-2">
                 <input
                   type="color"
-                  value={bgColor}
+                  value={HEX_COLOR.test(bgColor) ? bgColor : "#ffffff"}
                   onChange={(e) => setBgColor(e.target.value)}
                   className="h-9 w-9 cursor-pointer rounded border border-surface-300 dark:border-surface-600"
                 />
@@ -170,33 +130,46 @@ export function QRModal({ code, onClose }: QRModalProps) {
               </div>
             </div>
           </div>
+          {!colorsValid && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Colors must be hex values like #1e40af
+            </p>
+          )}
 
           <div>
             <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Size: {size}px
+              Size: {scale}px per module
             </label>
             <input
               type="range"
-              min={128}
-              max={512}
-              step={32}
-              value={size}
-              onChange={(e) => setSize(Number(e.target.value))}
+              min={4}
+              max={16}
+              step={1}
+              value={scale}
+              onChange={(e) => setScale(Number(e.target.value))}
               className="w-full accent-primary-600"
             />
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button onClick={handleDownloadPNG} className="btn-secondary flex-1">
+            <button
+              onClick={() => download("png")}
+              disabled={!colorsValid}
+              className="btn-secondary flex-1"
+            >
               <Download size={16} /> PNG
             </button>
-            <button onClick={handleDownloadSVG} className="btn-primary flex-1">
+            <button
+              onClick={() => download("svg")}
+              disabled={!colorsValid}
+              className="btn-primary flex-1"
+            >
               <Download size={16} /> SVG
             </button>
           </div>
         </div>
 
-        <p className="mt-4 text-center text-xs text-surface-500">https://lnk.ly/{code}</p>
+        <p className="mt-4 text-center text-xs text-surface-500">{displayUrl(link.shortUrl)}</p>
       </div>
     </div>
   );

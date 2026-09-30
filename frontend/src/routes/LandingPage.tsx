@@ -1,8 +1,10 @@
 import { motion } from "motion/react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { errorMessage } from "../lib/http";
+import { displayUrl } from "../lib/utils";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
@@ -43,21 +45,15 @@ export function LandingPage() {
   // If user is authenticated, show dashboard link prominently
   void isAuthenticated;
 
-  const {
-    data: result,
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ["shorten", url],
-    queryFn: () => api.shorten.anonymous(url),
-    enabled: false,
-  });
+  const shorten = useMutation({ mutationFn: (longUrl: string) => api.shorten.anonymous(longUrl) });
+  const result = shorten.data;
+  const isLoading = shorten.isPending;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     setSubmitted(true);
-    await refetch();
+    shorten.mutate(url.trim());
   };
 
   return (
@@ -170,6 +166,12 @@ export function LandingPage() {
               </p>
             </motion.form>
 
+            {submitted && shorten.isError && (
+              <p className="mt-6 text-sm font-medium text-red-600 dark:text-red-400">
+                {errorMessage(shorten.error, "Could not shorten this URL")}
+              </p>
+            )}
+
             {/* Result */}
             {submitted && result && (
               <motion.div
@@ -183,9 +185,9 @@ export function LandingPage() {
                 </p>
                 <div className="mt-2 flex items-center justify-between gap-4">
                   <p className="text-lg font-semibold text-primary-600 dark:text-primary-400 truncate">
-                    https://{result.shortUrl}
+                    {displayUrl(result.shortUrl)}
                   </p>
-                  <CopyButton text={`https://${result.shortUrl}`} />
+                  <CopyButton text={result.shortUrl} />
                 </div>
                 <p className="mt-3 text-sm text-surface-500 dark:text-surface-400">
                   Anonymous links expire after 7 days.{" "}

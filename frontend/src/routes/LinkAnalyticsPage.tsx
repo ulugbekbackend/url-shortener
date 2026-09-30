@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatNumber, getCountryFlag } from "../lib/utils";
+import { displayUrl, formatNumber, getCountryFlag } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
@@ -144,9 +144,9 @@ export function LinkAnalyticsPage() {
                 </h1>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
-                    https://{link.shortUrl}
+                    {displayUrl(link.shortUrl)}
                   </span>
-                  <CopyButton text={`https://${link.shortUrl}`} />
+                  <CopyButton text={link.shortUrl} />
                   <Badge variant={link.isActive ? "success" : "danger"}>
                     {link.isActive ? "Active" : "Disabled"}
                   </Badge>
@@ -500,9 +500,7 @@ export function LinkAnalyticsPage() {
       </div>
 
       {/* QR Modal */}
-      {showQR && (
-        <QRModal url={link.originalUrl} code={link.code} onClose={() => setShowQR(false)} />
-      )}
+      {showQR && <QRModal link={link} onClose={() => setShowQR(false)} />}
     </div>
   );
 }

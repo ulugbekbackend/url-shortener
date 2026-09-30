@@ -1,5 +1,18 @@
-import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey, User } from "../types";
-import { request } from "./http";
+import type {
+  ApiKey,
+  BreakdownItem,
+  Link,
+  LinkChanges,
+  LinkInput,
+  LinkListParams,
+  Page,
+  QrOptions,
+  StatsSummary,
+  Tag,
+  TimeSeriesPoint,
+  User,
+} from "../types";
+import { ApiError, request } from "./http";
 import {
   getUserLinks,
   generateTimeSeries,
@@ -34,89 +47,28 @@ export const api = {
     me: () => request<User>("/auth/me"),
   },
   links: {
-    list: async (params?: { search?: string; tag?: string; status?: string }): Promise<Link[]> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      let result = [...getUserLinks(userId)];
-
-      if (params?.search) {
-        const s = params.search.toLowerCase();
-        result = result.filter(
-          (l) =>
-            l.title?.toLowerCase().includes(s) ||
-            l.originalUrl.toLowerCase().includes(s) ||
-            l.code.toLowerCase().includes(s),
-        );
-      }
-      if (params?.tag) {
-        result = result.filter((l) => l.tags.includes(params.tag!));
-      }
-      if (params?.status === "active") result = result.filter((l) => l.isActive);
-      if (params?.status === "disabled") result = result.filter((l) => !l.isActive);
-      return result;
-    },
+    list: (params: LinkListParams = {}) => request<Page<Link>>("/links", { query: { ...params } }),
+    /** null when the link doesn't exist or isn't the user's */
     get: async (id: string): Promise<Link | null> => {
-      await delay(200);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const link = links.find((l) => l.id === id);
-      // Ownership check: only return if it belongs to current user
-      if (link && link.id.includes(userId)) {
-        return link;
+      try {
+        return await request<Link>(`/links/${id}`);
+      } catch (err) {
+        // 422: the id is not even a UUID
+        if (err instanceof ApiError && (err.status === 404 || err.status === 422)) return null;
+        throw err;
       }
-      // Also allow if user just created it (new links)
-      if (link) return link;
-      return null;
     },
-    create: async (data: {
-      url: string;
-      customCode?: string;
-      title?: string;
-      tags?: string[];
-    }): Promise<Link> => {
-      await delay(500);
-      const userId = getCurrentUserId();
-      const code = data.customCode || Math.random().toString(36).substring(2, 9);
-      const newLink: Link = {
-        id: `link_${userId}_${Date.now()}`,
-        code,
-        originalUrl: data.url,
-        shortUrl: `lnk.ly/${code}`,
-        title: data.title || null,
-        faviconUrl: `https://www.google.com/s2/favicons?domain=${new URL(data.url).hostname}&sz=32`,
-        tags: data.tags || [],
-        totalClicks: 0,
-        isActive: true,
-        isPermanent: false,
-        isCustom: !!data.customCode,
-        expiresAt: null,
-        maxClicks: null,
-        hasPassword: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      // Add to user's links
-      const links = getUserLinks(userId);
-      links.unshift(newLink);
-      return newLink;
-    },
-    delete: async (id: string): Promise<void> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const idx = links.findIndex((l) => l.id === id);
-      if (idx >= 0) links.splice(idx, 1);
-    },
-    toggle: async (id: string): Promise<Link> => {
-      await delay(200);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const link = links.find((l) => l.id === id);
-      if (!link) throw new Error("Link not found");
-      link.isActive = !link.isActive;
-      link.updatedAt = new Date().toISOString();
-      return { ...link };
-    },
+    create: (input: LinkInput) => request<Link>("/links", { method: "POST", body: input }),
+    update: (id: string, changes: LinkChanges) =>
+      request<Link>(`/links/${id}`, { method: "PATCH", body: changes }),
+    toggle: (link: Link) =>
+      request<Link>(`/links/${link.id}`, { method: "PATCH", body: { isActive: !link.isActive } }),
+    delete: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),
+    qr: (id: string, options: QrOptions) =>
+      request<Blob>(`/links/${id}/qr`, { query: { ...options }, responseType: "blob" }),
+  },
+  tags: {
+    list: () => request<Tag[]>("/tags"),
   },
   stats: {
     summary: async (_linkId?: string): Promise<StatsSummary> => {
@@ -178,10 +130,7 @@ export const api = {
     },
   },
   shorten: {
-    anonymous: async (_url: string): Promise<{ shortUrl: string; code: string }> => {
-      await delay(600);
-      const code = Math.random().toString(36).substring(2, 9);
-      return { shortUrl: `lnk.ly/${code}`, code };
-    },
+    anonymous: (url: string) =>
+      request<Link>("/links/anonymous", { method: "POST", body: { url }, auth: false }),
   },
 };

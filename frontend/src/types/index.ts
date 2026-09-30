@@ -25,6 +25,59 @@ export interface Link {
   updatedAt: string;
 }
 
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  createdAt: string;
+  linkCount: number;
+}
+
+export interface LinkListParams {
+  search?: string;
+  tag?: string;
+  status?: "active" | "disabled";
+  sort?: "created" | "clicks";
+  page?: number;
+  pageSize?: number;
+}
+
+export interface LinkInput {
+  url: string;
+  customCode?: string;
+  title?: string;
+  tags?: string[];
+  expiresAt?: string | null;
+  maxClicks?: number | null;
+  password?: string;
+  isPermanent?: boolean;
+}
+
+/** PATCH semantics: only present fields change; null clears a nullable field. */
+export interface LinkChanges {
+  title?: string | null;
+  tags?: string[];
+  expiresAt?: string | null;
+  maxClicks?: number | null;
+  isActive?: boolean;
+  isPermanent?: boolean;
+}
+
+export interface QrOptions {
+  format: "png" | "svg";
+  /** Pixels per QR module */
+  scale?: number;
+  border?: number;
+  dark?: string;
+  light?: string;
+}
+
 export interface ClickEvent {
   id: string;
   linkId: string;

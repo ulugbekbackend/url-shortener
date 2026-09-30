@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatDate, formatNumber } from "../lib/utils";
+import { SHORT_HOST } from "../lib/config";
+import { useDebouncedValue } from "../lib/hooks";
+import { errorMessage } from "../lib/http";
+import { displayUrl, formatDate, formatNumber } from "../lib/utils";
+import { useToastStore } from "../stores/toastStore";
+import type { Link } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
@@ -20,48 +25,86 @@ import {
   ToggleRight,
   Edit,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 type StatusFilter = "all" | "active" | "disabled";
 type SortBy = "created" | "clicks";
 
+const PAGE_SIZE = 20;
+
+/** Link mutations change link lists, tag counts and stats alike */
+function invalidateLinkData(queryClient: ReturnType<typeof useQueryClient>) {
+  for (const key of ["links", "link", "tags", "stats"]) {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
+
 export function LinksPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.addToast);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortBy>("created");
   const [selectedTag, setSelectedTag] = useState<string>("");
+  const [page, setPage] = useState(1);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [qrLink, setQrLink] = useState<{ url: string; code: string } | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(location.pathname === "/links/new");
+  const [editLink, setEditLink] = useState<Link | null>(null);
+  const [qrLink, setQrLink] = useState<Link | null>(null);
+  const debouncedSearch = useDebouncedValue(search);
 
-  const { data: links, isLoading } = useQuery({
-    queryKey: ["links", search, statusFilter, selectedTag],
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["links", debouncedSearch, statusFilter, selectedTag, sortBy, page],
     queryFn: () =>
       api.links.list({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         tag: selectedTag || undefined,
+        sort: sortBy,
+        page,
+        pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
+
+  const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: api.tags.list });
+
+  const onMutationError = (err: unknown) => addToast(errorMessage(err), "error");
 
   const deleteMutation = useMutation({
     mutationFn: api.links.delete,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["links"] }),
+    onSuccess: () => {
+      invalidateLinkData(queryClient);
+      addToast("Link deleted", "success");
+    },
+    onError: onMutationError,
   });
 
   const toggleMutation = useMutation({
     mutationFn: api.links.toggle,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["links"] }),
+    onSuccess: (link) => {
+      invalidateLinkData(queryClient);
+      addToast(link.isActive ? "Link enabled" : "Link disabled", "success");
+    },
+    onError: onMutationError,
   });
 
-  const sortedLinks = [...(links || [])].sort((a, b) => {
-    if (sortBy === "clicks") return b.totalClicks - a.totalClicks;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  const links = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const filtersActive = Boolean(debouncedSearch || selectedTag || statusFilter !== "all");
 
-  const allTags = [...new Set(links?.flatMap((l) => l.tags) || [])];
+  // Any filter change starts again from the first page
+  const withPageReset =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setPage(1);
+    };
 
   return (
     <div className="space-y-6">
@@ -69,7 +112,7 @@ export function LinksPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Links</h1>
-          <p className="text-surface-600 dark:text-surface-400">{links?.length || 0} links total</p>
+          <p className="text-surface-600 dark:text-surface-400">{total} links total</p>
         </div>
         <button onClick={() => setShowCreateModal(true)} className="btn-primary">
           <Plus size={18} /> New Link
@@ -84,7 +127,7 @@ export function LinksPage() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => withPageReset(setSearch)(e.target.value)}
               placeholder="Search links..."
               className="input-field !pl-10"
             />
@@ -93,7 +136,7 @@ export function LinksPage() {
             <Filter size={16} className="text-surface-400" />
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              onChange={(e) => withPageReset(setStatusFilter)(e.target.value as StatusFilter)}
               className="input-field !w-auto"
             >
               <option value="all">All status</option>
@@ -102,22 +145,22 @@ export function LinksPage() {
             </select>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              onChange={(e) => withPageReset(setSortBy)(e.target.value as SortBy)}
               className="input-field !w-auto"
             >
               <option value="created">Newest first</option>
               <option value="clicks">Most clicks</option>
             </select>
-            {allTags.length > 0 && (
+            {tags && tags.length > 0 && (
               <select
                 value={selectedTag}
-                onChange={(e) => setSelectedTag(e.target.value)}
+                onChange={(e) => withPageReset(setSelectedTag)(e.target.value)}
                 className="input-field !w-auto"
               >
                 <option value="">All tags</option>
-                {allTags.map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
+                {tags.map((tag) => (
+                  <option key={tag.id} value={tag.name}>
+                    {tag.name} ({tag.linkCount})
                   </option>
                 ))}
               </select>
@@ -131,15 +174,22 @@ export function LinksPage() {
         <div className="flex justify-center py-12">
           <Spinner size="lg" />
         </div>
-      ) : sortedLinks.length === 0 ? (
+      ) : isError ? (
+        <div className="card text-center py-12">
+          <p className="text-lg font-medium text-surface-900 dark:text-white">
+            Could not load links
+          </p>
+          <p className="mt-2 text-surface-600 dark:text-surface-400">{errorMessage(error)}</p>
+        </div>
+      ) : links.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-lg font-medium text-surface-900 dark:text-white">No links found</p>
           <p className="mt-2 text-surface-600 dark:text-surface-400">
-            {search
+            {filtersActive
               ? "Try adjusting your search or filters."
               : "Create your first link to get started."}
           </p>
-          {!search && (
+          {!filtersActive && (
             <button onClick={() => setShowCreateModal(true)} className="btn-primary mt-4">
               <Plus size={18} /> Create Link
             </button>
@@ -172,7 +222,7 @@ export function LinksPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
-                {sortedLinks.map((link) => (
+                {links.map((link) => (
                   <tr
                     key={link.id}
                     className="hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors"
@@ -199,13 +249,9 @@ export function LinksPage() {
                           </p>
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-primary-600 dark:text-primary-400">
-                              {link.shortUrl}
+                              {displayUrl(link.shortUrl)}
                             </span>
-                            <CopyButton
-                              text={`https://${link.shortUrl}`}
-                              label=""
-                              className="!text-xs"
-                            />
+                            <CopyButton text={link.shortUrl} label="" className="!text-xs" />
                           </div>
                         </div>
                       </div>
@@ -257,6 +303,7 @@ export function LinksPage() {
                             </button>
                             <button
                               onClick={() => {
+                                setEditLink(link);
                                 setOpenMenu(null);
                               }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
@@ -265,7 +312,7 @@ export function LinksPage() {
                             </button>
                             <button
                               onClick={() => {
-                                setQrLink({ url: link.originalUrl, code: link.code });
+                                setQrLink(link);
                                 setOpenMenu(null);
                               }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
@@ -274,7 +321,7 @@ export function LinksPage() {
                             </button>
                             <button
                               onClick={() => {
-                                toggleMutation.mutate(link.id);
+                                toggleMutation.mutate(link);
                                 setOpenMenu(null);
                               }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
@@ -285,8 +332,14 @@ export function LinksPage() {
                             <hr className="my-1 border-surface-200 dark:border-surface-700" />
                             <button
                               onClick={() => {
-                                deleteMutation.mutate(link.id);
                                 setOpenMenu(null);
+                                if (
+                                  window.confirm(
+                                    `Delete ${displayUrl(link.shortUrl)}? Its analytics will be lost.`,
+                                  )
+                                ) {
+                                  deleteMutation.mutate(link.id);
+                                }
                               }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                             >
@@ -301,48 +354,103 @@ export function LinksPage() {
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between border-t border-surface-200 px-4 py-3 dark:border-surface-700">
+              <span className="text-sm text-surface-600 dark:text-surface-400">
+                Page {page} of {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => p - 1)}
+                  disabled={page <= 1}
+                  className="btn-secondary !px-3 !py-1.5 text-sm"
+                >
+                  <ChevronLeft size={16} /> Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page >= pageCount}
+                  className="btn-secondary !px-3 !py-1.5 text-sm"
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Create Modal */}
       {showCreateModal && <CreateLinkModal onClose={() => setShowCreateModal(false)} />}
-
-      {/* QR Modal */}
-      {qrLink && <QRModal url={qrLink.url} code={qrLink.code} onClose={() => setQrLink(null)} />}
+      {editLink && <EditLinkModal link={editLink} onClose={() => setEditLink(null)} />}
+      {qrLink && <QRModal link={qrLink} onClose={() => setQrLink(null)} />}
     </div>
   );
 }
 
-function CreateLinkModal({ onClose }: { onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [url, setUrl] = useState("");
-  const [customCode, setCustomCode] = useState("");
-  const [title, setTitle] = useState("");
+function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
   const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.links.create({
-        url,
-        customCode: customCode || undefined,
-        title: title || undefined,
-        tags,
-      }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["links"] });
-      navigate(`/links/${data.id}`);
-    },
-  });
 
   const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput("");
-    }
+    const tag = tagInput.trim();
+    if (tag && !tags.includes(tag)) onChange([...tags, tag]);
+    setTagInput("");
   };
 
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+        Tags
+      </label>
+      <div className="flex flex-wrap gap-2 mb-2">
+        {tags.map((tag) => (
+          <span
+            key={tag}
+            className="badge bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 flex items-center gap-1"
+          >
+            {tag}
+            <button
+              type="button"
+              onClick={() => onChange(tags.filter((t) => t !== tag))}
+              className="hover:text-red-500"
+              aria-label={`Remove tag ${tag}`}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addTag();
+            }
+          }}
+          placeholder="Add a tag..."
+          className="input-field flex-1"
+          maxLength={50}
+        />
+        <button type="button" onClick={addTag} className="btn-secondary">
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -353,122 +461,174 @@ function CreateLinkModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-surface-900 dark:text-white">Create New Link</h2>
-          <button onClick={onClose} className="btn-ghost !p-2">
+          <h2 className="text-xl font-bold text-surface-900 dark:text-white">{title}</h2>
+          <button onClick={onClose} className="btn-ghost !p-2" aria-label="Close">
             <X size={20} />
           </button>
         </div>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate();
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Destination URL *
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/very-long-url..."
-              className="input-field"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Custom Alias (optional)
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-surface-500">lnk.ly/</span>
-              <input
-                type="text"
-                value={customCode}
-                onChange={(e) => setCustomCode(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
-                placeholder="my-custom-link"
-                className="input-field flex-1"
-                maxLength={50}
-                pattern="[A-Za-z0-9_-]{3,50}"
-              />
-            </div>
-            <p className="mt-1 text-xs text-surface-500">
-              3-50 chars, letters, numbers, hyphens, underscores
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Title (optional)
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="My awesome link"
-              className="input-field"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Tags
-            </label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="badge bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 flex items-center gap-1"
-                >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => setTags(tags.filter((t) => t !== tag))}
-                    className="hover:text-red-500"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Add a tag..."
-                className="input-field flex-1"
-              />
-              <button type="button" onClick={addTag} className="btn-secondary">
-                Add
-              </button>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending || !url}
-              className="btn-primary"
-            >
-              {createMutation.isPending ? <Spinner size="sm" /> : "Create Link"}
-            </button>
-          </div>
-        </form>
+        {children}
       </div>
     </div>
+  );
+}
+
+function FormError({ error }: { error: unknown }) {
+  if (!error) return null;
+  return (
+    <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+      {errorMessage(error)}
+    </div>
+  );
+}
+
+function CreateLinkModal({ onClose }: { onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [url, setUrl] = useState("");
+  const [customCode, setCustomCode] = useState("");
+  const [title, setTitle] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      api.links.create({
+        url,
+        customCode: customCode || undefined,
+        title: title || undefined,
+        tags,
+      }),
+    onSuccess: (link) => {
+      invalidateLinkData(queryClient);
+      navigate(`/links/${link.id}`);
+    },
+  });
+
+  return (
+    <Modal title="Create New Link" onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          createMutation.mutate();
+        }}
+        className="space-y-4"
+      >
+        <FormError error={createMutation.error} />
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Destination URL *
+          </label>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/very-long-url..."
+            className="input-field"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Custom Alias (optional)
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-surface-500">{SHORT_HOST}/</span>
+            <input
+              type="text"
+              value={customCode}
+              onChange={(e) => setCustomCode(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))}
+              placeholder="my-custom-link"
+              className="input-field flex-1"
+              maxLength={50}
+              pattern="[A-Za-z0-9_-]{3,50}"
+            />
+          </div>
+          <p className="mt-1 text-xs text-surface-500">
+            3-50 chars, letters, numbers, hyphens, underscores
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Title (optional)
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="My awesome link"
+            className="input-field"
+            maxLength={200}
+          />
+        </div>
+
+        <TagEditor tags={tags} onChange={setTags} />
+
+        <div className="flex justify-end gap-3 pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={createMutation.isPending || !url} className="btn-primary">
+            {createMutation.isPending ? <Spinner size="sm" /> : "Create Link"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function EditLinkModal({ link, onClose }: { link: Link; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const addToast = useToastStore((s) => s.addToast);
+  const [title, setTitle] = useState(link.title ?? "");
+  const [tags, setTags] = useState<string[]>(link.tags);
+
+  const updateMutation = useMutation({
+    mutationFn: () => api.links.update(link.id, { title: title.trim() || null, tags }),
+    onSuccess: () => {
+      invalidateLinkData(queryClient);
+      addToast("Link updated", "success");
+      onClose();
+    },
+  });
+
+  return (
+    <Modal title={`Edit ${displayUrl(link.shortUrl)}`} onClose={onClose}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          updateMutation.mutate();
+        }}
+        className="space-y-4"
+      >
+        <FormError error={updateMutation.error} />
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={link.code}
+            className="input-field"
+            maxLength={200}
+          />
+        </div>
+
+        <TagEditor tags={tags} onChange={setTags} />
+
+        <div className="flex justify-end gap-3 pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={updateMutation.isPending} className="btn-primary">
+            {updateMutation.isPending ? <Spinner size="sm" /> : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

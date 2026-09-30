@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatNumber, formatDate, truncate } from "../lib/utils";
+import { displayUrl, formatNumber, formatDate, truncate } from "../lib/utils";
 import { Spinner } from "../components/ui/Spinner";
 import { CopyButton } from "../components/ui/CopyButton";
 import type { DateRange } from "../types";
@@ -56,12 +56,12 @@ export function DashboardPage() {
     queryFn: () => api.stats.breakdown("all", "device"),
   });
 
-  const { data: links } = useQuery({
-    queryKey: ["links"],
-    queryFn: () => api.links.list(),
+  const { data: topLinksPage } = useQuery({
+    queryKey: ["links", "top"],
+    queryFn: () => api.links.list({ sort: "clicks", pageSize: 5 }),
   });
 
-  const topLinks = links?.slice(0, 5) || [];
+  const topLinks = topLinksPage?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -309,7 +309,7 @@ export function DashboardPage() {
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-xs text-primary-600 dark:text-primary-400">
-                      {link.shortUrl}
+                      {displayUrl(link.shortUrl)}
                     </span>
                     <CopyButton text={link.shortUrl} label="" className="!text-xs" />
                   </div>
