@@ -1,1 +1,6 @@
 * text=auto
+
+# Read by make/sh/docker, which choke on CRLF: keep LF even on Windows checkouts
+Makefile text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
