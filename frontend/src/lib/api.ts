@@ -1,4 +1,5 @@
-import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey } from "../types";
+import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey, User } from "../types";
+import { request } from "./http";
 import {
   getUserLinks,
   generateTimeSeries,
@@ -17,51 +18,20 @@ function getCurrentUserId(): string {
 
 export const api = {
   auth: {
-    register: async (
-      email: string,
-      password: string,
-      name: string,
-    ): Promise<{
-      user: { id: string; name: string; email: string; plan: string };
-      token: string;
-    }> => {
-      await delay(600);
-      const id = `usr_${Date.now().toString(36)}`;
-      const token = `tok_${Math.random().toString(36).substring(2)}`;
-      return {
-        user: { id, name, email, plan: "free" },
-        token,
-      };
-    },
-    login: async (
-      email: string,
-      _password: string,
-    ): Promise<{
-      user: { id: string; name: string; email: string; plan: string };
-      token: string;
-    }> => {
-      await delay(600);
-      // Simulate finding user by email
-      const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> =
-        stored ? JSON.parse(stored) : {};
-
-      const user = Object.values(users).find((u) => u.email === email);
-      if (user) {
-        return {
-          user: { id: user.id, name: user.name, email: user.email, plan: "free" },
-          token: `tok_${Math.random().toString(36).substring(2)}`,
-        };
-      }
-      throw new Error("Invalid email or password");
-    },
-    saveUser: (user: { id: string; name: string; email: string; password: string }) => {
-      const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> =
-        stored ? JSON.parse(stored) : {};
-      users[user.id] = user;
-      localStorage.setItem("linkly-users", JSON.stringify(users));
-    },
+    register: (email: string, password: string, name: string) =>
+      request<User>("/auth/register", {
+        method: "POST",
+        body: { email, password, name },
+        auth: false,
+      }),
+    login: (email: string, password: string) =>
+      request<{ accessToken: string; user: User }>("/auth/login", {
+        method: "POST",
+        body: { email, password },
+        auth: false,
+      }),
+    logout: () => request<void>("/auth/logout", { method: "POST", auth: false }),
+    me: () => request<User>("/auth/me"),
   },
   links: {
     list: async (params?: { search?: string; tag?: string; status?: string }): Promise<Link[]> => {

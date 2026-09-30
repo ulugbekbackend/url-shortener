@@ -1,14 +1,23 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { api } from "../lib/api";
+import { errorMessage } from "../lib/http";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { Spinner } from "../components/ui/Spinner";
 import { Zap, ArrowRight, Eye, EyeOff } from "lucide-react";
 
+/** Where to go after signing in: the page that sent the user here, else the dashboard. */
+function useRedirectTarget(): string {
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
+  return from && from !== "/login" ? from : "/dashboard";
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const target = useRedirectTarget();
+  const { login, isAuthenticated } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,14 +30,17 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await api.auth.login(email, password);
-      login(result.user, result.token);
-      navigate("/dashboard");
-    } catch {
-      setError("Invalid email or password. Please try again or register first.");
+      const { accessToken, user } = await api.auth.login(email, password);
+      login(user, accessToken);
+      navigate(target, { replace: true });
+    } catch (err) {
+      setError(errorMessage(err, "Sign in failed. Please try again."));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  if (isAuthenticated) return <Navigate to={target} replace />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950">
@@ -88,19 +100,6 @@ export function LoginPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
-                <input type="checkbox" className="rounded border-surface-300 accent-primary-600" />
-                Remember me
-              </label>
-              <button
-                type="button"
-                className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-              >
-                Forgot password?
-              </button>
-            </div>
-
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? (
                 <Spinner size="sm" />
@@ -133,7 +132,7 @@ export function LoginPage() {
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated } = useAuthStore();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -147,21 +146,19 @@ export function RegisterPage() {
     setLoading(true);
 
     try {
-      const result = await api.auth.register(email, password, name);
-      // Save user for future login
-      api.auth.saveUser({
-        id: result.user.id,
-        name,
-        email,
-        password,
-      });
-      login(result.user, result.token);
-      navigate("/dashboard");
-    } catch {
-      setError("Registration failed. Please try again.");
+      await api.auth.register(email, password, name);
+      // Registration doesn't start a session, so sign in right away
+      const { accessToken, user } = await api.auth.login(email, password);
+      login(user, accessToken);
+      navigate("/dashboard", { replace: true });
+    } catch (err) {
+      setError(errorMessage(err, "Registration failed. Please try again."));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface-50 px-4 dark:bg-surface-950">
