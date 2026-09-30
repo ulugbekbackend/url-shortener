@@ -1,4 +1,4 @@
-.PHONY: help setup dev up down logs test test-backend test-frontend test-db lint format clean \
+.PHONY: help setup install dev up down logs test test-backend test-frontend test-db lint format clean \
 	shell-backend shell-frontend db-migrate db-rollback redis-cli psql
 
 # Backend virtualenv interpreter (Windows venvs use Scripts/, others bin/)
@@ -8,8 +8,13 @@ COMPOSE := docker compose
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Create the backend venv, install backend and frontend dependencies
-	cd backend && python -m venv venv && $(PY) -m pip install -e ".[dev]"
+setup: ## Create the backend venv, then install everything
+	cd backend && python -m venv venv
+	@# Re-run make so PY is resolved again now that the venv exists
+	$(MAKE) install
+
+install: ## Install backend (into backend/venv) and frontend dependencies
+	cd backend && $(PY) -m pip install -e ".[dev]"
 	cd frontend && npm ci
 
 dev: ## Build and start everything in Docker (foreground)
