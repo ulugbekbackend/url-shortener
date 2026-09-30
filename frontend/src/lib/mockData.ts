@@ -1,27 +1,76 @@
-import type { Link, ClickEvent, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey } from "../types";
+import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey } from "../types";
 
 const domains = [
-  "github.com", "stackoverflow.com", "medium.com", "dev.to",
-  "docs.python.org", "react.dev", "tailwindcss.com", "youtube.com",
-  "twitter.com", "linkedin.com", "news.ycombinator.com", "reddit.com",
-  "amazon.com", "google.com", "apple.com", "mozilla.org",
+  "github.com",
+  "stackoverflow.com",
+  "medium.com",
+  "dev.to",
+  "docs.python.org",
+  "react.dev",
+  "tailwindcss.com",
+  "youtube.com",
+  "twitter.com",
+  "linkedin.com",
+  "news.ycombinator.com",
+  "reddit.com",
+  "amazon.com",
+  "google.com",
+  "apple.com",
+  "mozilla.org",
 ];
 
 const titles = [
-  "React Documentation", "GitHub - Build software better",
-  "Stack Overflow - Where Developers Learn", "Medium - Read and write",
-  "Tailwind CSS - Rapidly build modern websites", "YouTube - Broadcast Yourself",
-  "Dev.to - Community", "Hacker News", "Reddit - Dive into anything",
-  "Python Docs", "Apple", "MDN Web Docs",
+  "React Documentation",
+  "GitHub - Build software better",
+  "Stack Overflow - Where Developers Learn",
+  "Medium - Read and write",
+  "Tailwind CSS - Rapidly build modern websites",
+  "YouTube - Broadcast Yourself",
+  "Dev.to - Community",
+  "Hacker News",
+  "Reddit - Dive into anything",
+  "Python Docs",
+  "Apple",
+  "MDN Web Docs",
 ];
 
 const countries = ["US", "GB", "DE", "FR", "JP", "BR", "IN", "CA", "AU", "NL", "SE", "KR"];
-const cities = ["New York", "London", "Berlin", "Paris", "Tokyo", "São Paulo", "Mumbai", "Toronto", "Sydney", "Amsterdam", "Stockholm", "Seoul"];
-const devices: Array<"desktop" | "mobile" | "tablet"> = ["desktop", "mobile", "tablet"];
+const cities = [
+  "New York",
+  "London",
+  "Berlin",
+  "Paris",
+  "Tokyo",
+  "São Paulo",
+  "Mumbai",
+  "Toronto",
+  "Sydney",
+  "Amsterdam",
+  "Stockholm",
+  "Seoul",
+];
 const oses = ["Windows", "macOS", "Linux", "iOS", "Android"];
 const browsers = ["Chrome", "Firefox", "Safari", "Edge", "Opera"];
-const referrers = ["google.com", "twitter.com", "reddit.com", "news.ycombinator.com", "linkedin.com", "facebook.com", "direct", "github.com"];
-const tags = ["portfolio", "project", "blog", "docs", "marketing", "social", "reference", "tutorial"];
+const referrers = [
+  "google.com",
+  "twitter.com",
+  "reddit.com",
+  "news.ycombinator.com",
+  "linkedin.com",
+  "facebook.com",
+  "direct",
+  "github.com",
+];
+const tags = [
+  "portfolio",
+  "project",
+  "blog",
+  "docs",
+  "marketing",
+  "social",
+  "reference",
+  "tutorial",
+];
 
 function randomFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -39,7 +88,18 @@ function generateCode(): string {
 }
 
 function generateCustomCode(): string {
-  const words = ["portfolio", "blog", "docs", "projects", "about", "contact", "resume", "links", "github", "demo"];
+  const words = [
+    "portfolio",
+    "blog",
+    "docs",
+    "projects",
+    "about",
+    "contact",
+    "resume",
+    "links",
+    "github",
+    "demo",
+  ];
   return randomFrom(words) + "-" + randomInt(1, 99);
 }
 
@@ -66,7 +126,8 @@ export function generateMockLinksForUser(userId: string, count: number): Link[] 
     const isCustom = Math.random() > 0.7;
     const code = isCustom ? generateCustomCode() : generateCode();
     const domain = randomFrom(domains);
-    const path = "/" + randomInt(1, 9999) + "/" + randomFrom(["guide", "tutorial", "docs", "api", "blog"]);
+    const path =
+      "/" + randomInt(1, 9999) + "/" + randomFrom(["guide", "tutorial", "docs", "api", "blog"]);
     const originalUrl = `https://${domain}${path}`;
     const numTags = randomInt(0, 3);
     const linkTags: string[] = [];
@@ -81,7 +142,8 @@ export function generateMockLinksForUser(userId: string, count: number): Link[] 
       originalUrl,
       shortUrl: `lnk.ly/${code}`,
       title: Math.random() > 0.2 ? randomFrom(titles) : null,
-      faviconUrl: Math.random() > 0.3 ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null,
+      faviconUrl:
+        Math.random() > 0.3 ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null,
       tags: linkTags,
       totalClicks: randomInt(0, 15000),
       isActive: Math.random() > 0.1,
@@ -97,7 +159,10 @@ export function generateMockLinksForUser(userId: string, count: number): Link[] 
   return links.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
-export function generateTimeSeries(days: number, interval: "hour" | "day" | "week" = "day"): TimeSeriesPoint[] {
+export function generateTimeSeries(
+  days: number,
+  interval: "hour" | "day" | "week" = "day",
+): TimeSeriesPoint[] {
   const points: TimeSeriesPoint[] = [];
   const now = new Date();
 
@@ -137,26 +202,42 @@ export function generateTimeSeries(days: number, interval: "hour" | "day" | "wee
 
 export function generateBreakdown(dimension: string, count: number = 8): BreakdownItem[] {
   const items: BreakdownItem[] = [];
-  let source: string[] = [];
+  let source: string[];
 
   switch (dimension) {
-    case "country": source = countries; break;
-    case "city": source = cities; break;
-    case "device": source = ["Desktop", "Mobile", "Tablet"]; break;
-    case "os": source = oses; break;
-    case "browser": source = browsers; break;
-    case "referrer": source = referrers; break;
-    case "utm_source": source = ["google", "twitter", "newsletter", "github", "linkedin", "direct"]; break;
-    default: source = ["Unknown"];
+    case "country":
+      source = countries;
+      break;
+    case "city":
+      source = cities;
+      break;
+    case "device":
+      source = ["Desktop", "Mobile", "Tablet"];
+      break;
+    case "os":
+      source = oses;
+      break;
+    case "browser":
+      source = browsers;
+      break;
+    case "referrer":
+      source = referrers;
+      break;
+    case "utm_source":
+      source = ["google", "twitter", "newsletter", "github", "linkedin", "direct"];
+      break;
+    default:
+      source = ["Unknown"];
   }
 
   const total = randomInt(1000, 10000);
   let remaining = total;
 
   for (let i = 0; i < Math.min(count, source.length); i++) {
-    const count_ = i === Math.min(count, source.length) - 1
-      ? remaining
-      : Math.floor(remaining * (0.3 + Math.random() * 0.4));
+    const count_ =
+      i === Math.min(count, source.length) - 1
+        ? remaining
+        : Math.floor(remaining * (0.3 + Math.random() * 0.4));
     remaining -= count_;
     items.push({
       name: source[i],

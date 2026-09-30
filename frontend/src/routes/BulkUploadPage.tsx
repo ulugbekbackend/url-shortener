@@ -42,7 +42,7 @@ export function BulkUploadPage() {
       const text = ev.target?.result as string;
       const lines = text.split("\n").filter((l) => l.trim());
       const parsed = lines.map((line) =>
-        line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""))
+        line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")),
       );
       setPreview(parsed.slice(0, 11)); // Show header + 10 rows
     };
@@ -76,7 +76,8 @@ export function BulkUploadPage() {
   };
 
   const downloadTemplate = () => {
-    const csv = "url,title,tags\nhttps://example.com/page1,Example Page,\"tag1,tag2\"\nhttps://example.com/page2,Another Page,tag3";
+    const csv =
+      'url,title,tags\nhttps://example.com/page1,Example Page,"tag1,tag2"\nhttps://example.com/page2,Another Page,tag3';
     const blob = new Blob([csv], { type: "text/csv" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -118,7 +119,7 @@ export function BulkUploadPage() {
                   const text = ev.target?.result as string;
                   const lines = text.split("\n").filter((l) => l.trim());
                   const parsed = lines.map((line) =>
-                    line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, ""))
+                    line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")),
                   );
                   setPreview(parsed.slice(0, 11));
                 };
@@ -138,16 +139,10 @@ export function BulkUploadPage() {
               onChange={handleFileChange}
               className="hidden"
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="btn-primary mt-4"
-            >
+            <button onClick={() => fileInputRef.current?.click()} className="btn-primary mt-4">
               <FileText size={16} /> Select CSV File
             </button>
-            <button
-              onClick={downloadTemplate}
-              className="btn-ghost mt-3 text-sm"
-            >
+            <button onClick={downloadTemplate} className="btn-ghost mt-3 text-sm">
               <Download size={14} /> Download template
             </button>
           </div>
@@ -168,7 +163,10 @@ export function BulkUploadPage() {
               </div>
             </div>
             <button
-              onClick={() => { setFile(null); setPreview([]); }}
+              onClick={() => {
+                setFile(null);
+                setPreview([]);
+              }}
               className="btn-ghost text-sm"
             >
               Choose different file
@@ -181,7 +179,10 @@ export function BulkUploadPage() {
                 <thead>
                   <tr className="border-b border-surface-200 bg-surface-50 dark:border-surface-700 dark:bg-surface-800/50">
                     {(preview[0] || []).map((header, i) => (
-                      <th key={i} className="px-4 py-2 text-left font-medium text-surface-600 dark:text-surface-400">
+                      <th
+                        key={i}
+                        className="px-4 py-2 text-left font-medium text-surface-600 dark:text-surface-400"
+                      >
                         {header}
                       </th>
                     ))}
@@ -191,7 +192,10 @@ export function BulkUploadPage() {
                   {preview.slice(1, 6).map((row, i) => (
                     <tr key={i}>
                       {row.map((cell, j) => (
-                        <td key={j} className="px-4 py-2 text-surface-700 dark:text-surface-300 max-w-[200px] truncate">
+                        <td
+                          key={j}
+                          className="px-4 py-2 text-surface-700 dark:text-surface-300 max-w-[200px] truncate"
+                        >
                           {cell}
                         </td>
                       ))}
@@ -208,15 +212,11 @@ export function BulkUploadPage() {
           )}
 
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-surface-500">
-              {preview.length - 1} links will be created
-            </p>
-            <button
-              onClick={handleProcess}
-              disabled={processing}
-              className="btn-primary"
-            >
-              {processing ? <Spinner size="sm" /> : (
+            <p className="text-sm text-surface-500">{preview.length - 1} links will be created</p>
+            <button onClick={handleProcess} disabled={processing} className="btn-primary">
+              {processing ? (
+                <Spinner size="sm" />
+              ) : (
                 <>
                   <Table size={16} /> Process & Create
                 </>
@@ -232,11 +232,15 @@ export function BulkUploadPage() {
           {/* Summary */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="card text-center">
-              <p className="text-3xl font-bold text-surface-900 dark:text-white">{results.length}</p>
+              <p className="text-3xl font-bold text-surface-900 dark:text-white">
+                {results.length}
+              </p>
               <p className="text-sm text-surface-500">Total processed</p>
             </div>
             <div className="card text-center border-emerald-200 dark:border-emerald-800">
-              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">{successCount}</p>
+              <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                {successCount}
+              </p>
               <p className="text-sm text-surface-500">Successful</p>
             </div>
             <div className="card text-center border-red-200 dark:border-red-800">
@@ -288,7 +292,12 @@ export function BulkUploadPage() {
 
           <div className="flex gap-3">
             <button
-              onClick={() => { setFile(null); setPreview([]); setResults([]); setCompleted(false); }}
+              onClick={() => {
+                setFile(null);
+                setPreview([]);
+                setResults([]);
+                setCompleted(false);
+              }}
               className="btn-secondary"
             >
               Upload Another File
@@ -306,8 +315,31 @@ export function BulkUploadPage() {
           <AlertTriangle size={18} className="text-amber-500" /> CSV Format
         </h3>
         <ul className="space-y-2 text-sm text-surface-600 dark:text-surface-400">
-          <li>• First row must be headers: <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">url</code>, <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">title</code> (optional), <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">tags</code> (optional)</li>
-          <li>• URLs must start with <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">http://</code> or <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">https://</code></li>
+          <li>
+            • First row must be headers:{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              url
+            </code>
+            ,{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              title
+            </code>{" "}
+            (optional),{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              tags
+            </code>{" "}
+            (optional)
+          </li>
+          <li>
+            • URLs must start with{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              http://
+            </code>{" "}
+            or{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              https://
+            </code>
+          </li>
           <li>• Maximum 500 rows per upload</li>
           <li>• Tags should be comma-separated within quotes</li>
           <li>• Invalid rows will be skipped and reported in results</li>

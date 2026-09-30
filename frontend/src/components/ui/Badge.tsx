@@ -15,9 +15,5 @@ const variants = {
 };
 
 export function Badge({ variant = "default", children, className }: BadgeProps) {
-  return (
-    <span className={cn("badge", variants[variant], className)}>
-      {children}
-    </span>
-  );
+  return <span className={cn("badge", variants[variant], className)}>{children}</span>;
 }
