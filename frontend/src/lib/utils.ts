@@ -17,6 +17,24 @@ export function truncate(str: string, max: number): string {
   return str.substring(0, max) + "…";
 }
 
+/** URL without the protocol, for display */
+export function displayUrl(url: string): string {
+  return url.replace(/^https?:\/\//, "");
+}
+
+export function downloadBlob(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(href);
+}
+
+export function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }

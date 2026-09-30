@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 // Lazy route chunks can take over the default 1s to transform on a cold run
 configure({ asyncUtilTimeout: 5000 });
@@ -39,7 +39,21 @@ window.matchMedia ??= (query: string) =>
     dispatchEvent: () => false,
   }) as MediaQueryList;
 
+// No real network in tests: by default every API call answers "not signed in"
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json(
+        { error: { code: "NOT_AUTHENTICATED", message: "Not authenticated" } },
+        { status: 401 },
+      ),
+    ),
+  );
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
   localStorage.clear();
 });

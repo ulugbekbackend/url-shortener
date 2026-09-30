@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Upload,
   FileText,
@@ -10,84 +11,65 @@ import {
   ArrowLeft,
   Table,
 } from "lucide-react";
+import { api } from "../lib/api";
+import { parseCsv } from "../lib/csv";
+import { errorMessage } from "../lib/http";
+import { displayUrl, downloadBlob } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
+import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
 
-interface BulkResult {
-  row: number;
-  url: string;
-  status: "success" | "error";
-  shortUrl?: string;
-  error?: string;
-}
+// Same limits the server enforces
+const MAX_ROWS = 500;
+const MAX_BYTES = 1024 * 1024;
 
 export function BulkUploadPage() {
+  const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
   const [preview, setPreview] = useState<string[][]>([]);
-  const [results, setResults] = useState<BulkResult[]>([]);
-  const [processing, setProcessing] = useState(false);
-  const [completed, setCompleted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
-    setResults([]);
-    setCompleted(false);
+  const upload = useMutation({
+    mutationFn: (csv: File) => api.links.bulk(csv),
+    onSuccess: () => {
+      for (const key of ["links", "tags", "stats"]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    },
+  });
+  const results = upload.data;
+  const rowCount = Math.max(0, preview.length - 1);
 
-    // Parse CSV for preview
+  const loadFile = (f: File) => {
+    upload.reset();
+    setFileError("");
+    if (!f.name.toLowerCase().endsWith(".csv")) {
+      setFileError("Please choose a .csv file.");
+      return;
+    }
+    if (f.size > MAX_BYTES) {
+      setFileError("The file is larger than 1 MB.");
+      return;
+    }
+    setFile(f);
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split("\n").filter((l) => l.trim());
-      const parsed = lines.map((line) =>
-        line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")),
-      );
-      setPreview(parsed.slice(0, 11)); // Show header + 10 rows
-    };
+    reader.onload = (ev) => setPreview(parseCsv(String(ev.target?.result ?? "")));
     reader.readAsText(f);
   };
 
-  const handleProcess = async () => {
-    setProcessing(true);
-    setResults([]);
-
-    // Simulate processing
-    const rows = preview.slice(1); // Skip header
-    const processed: BulkResult[] = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      const url = rows[i][0];
-      const isValid = url.startsWith("http://") || url.startsWith("https://");
-      processed.push({
-        row: i + 2,
-        url,
-        status: isValid ? "success" : "error",
-        shortUrl: isValid ? `lnk.ly/${Math.random().toString(36).substring(2, 9)}` : undefined,
-        error: isValid ? undefined : "Invalid URL format",
-      });
-    }
-
-    setResults(processed);
-    setProcessing(false);
-    setCompleted(true);
+  const reset = () => {
+    setFile(null);
+    setPreview([]);
+    setFileError("");
+    upload.reset();
   };
 
   const downloadTemplate = () => {
     const csv =
-      'url,title,tags\nhttps://example.com/page1,Example Page,"tag1,tag2"\nhttps://example.com/page2,Another Page,tag3';
-    const blob = new Blob([csv], { type: "text/csv" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "linkly-bulk-template.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
+      'url,title,tags,custom_code\nhttps://example.com/page1,Example Page,"tag1,tag2",\nhttps://example.com/page2,Another Page,tag3,my-alias';
+    downloadBlob(new Blob([csv], { type: "text/csv" }), "linkly-bulk-template.csv");
   };
-
-  const successCount = results.filter((r) => r.status === "success").length;
-  const errorCount = results.filter((r) => r.status === "error").length;
 
   return (
     <div className="space-y-6">
@@ -98,7 +80,7 @@ export function BulkUploadPage() {
         <div>
           <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Bulk Upload</h1>
           <p className="text-surface-600 dark:text-surface-400">
-            Create up to 500 links at once from a CSV file
+            Create up to {MAX_ROWS} links at once from a CSV file
           </p>
         </div>
       </div>
@@ -112,19 +94,7 @@ export function BulkUploadPage() {
             onDrop={(e) => {
               e.preventDefault();
               const f = e.dataTransfer.files[0];
-              if (f && f.name.endsWith(".csv")) {
-                setFile(f);
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const text = ev.target?.result as string;
-                  const lines = text.split("\n").filter((l) => l.trim());
-                  const parsed = lines.map((line) =>
-                    line.split(",").map((cell) => cell.trim().replace(/^"|"$/g, "")),
-                  );
-                  setPreview(parsed.slice(0, 11));
-                };
-                reader.readAsText(f);
-              }
+              if (f) loadFile(f);
             }}
           >
             <Upload size={40} className="mb-4 text-surface-400" />
@@ -136,8 +106,13 @@ export function BulkUploadPage() {
               ref={fileInputRef}
               type="file"
               accept=".csv"
-              onChange={handleFileChange}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) loadFile(f);
+                e.target.value = "";
+              }}
               className="hidden"
+              data-testid="csv-input"
             />
             <button onClick={() => fileInputRef.current?.click()} className="btn-primary mt-4">
               <FileText size={16} /> Select CSV File
@@ -145,12 +120,15 @@ export function BulkUploadPage() {
             <button onClick={downloadTemplate} className="btn-ghost mt-3 text-sm">
               <Download size={14} /> Download template
             </button>
+            {fileError && (
+              <p className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">{fileError}</p>
+            )}
           </div>
         </div>
       )}
 
       {/* Preview */}
-      {file && !completed && (
+      {file && !results && (
         <div className="card">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -158,17 +136,11 @@ export function BulkUploadPage() {
               <div>
                 <p className="font-medium text-surface-900 dark:text-white">{file.name}</p>
                 <p className="text-sm text-surface-500">
-                  {(file.size / 1024).toFixed(1)} KB • {preview.length - 1} rows
+                  {(file.size / 1024).toFixed(1)} KB • {rowCount} rows
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setPreview([]);
-              }}
-              className="btn-ghost text-sm"
-            >
+            <button onClick={reset} className="btn-ghost text-sm">
               Choose different file
             </button>
           </div>
@@ -203,18 +175,33 @@ export function BulkUploadPage() {
                   ))}
                 </tbody>
               </table>
-              {preview.length > 6 && (
+              {rowCount > 5 && (
                 <p className="px-4 py-2 text-xs text-surface-500 text-center">
-                  Showing 5 of {preview.length - 1} rows
+                  Showing 5 of {rowCount} rows
                 </p>
               )}
             </div>
           )}
 
+          {rowCount > MAX_ROWS && (
+            <p className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">
+              The file has {rowCount} rows; at most {MAX_ROWS} can be imported at once.
+            </p>
+          )}
+          {upload.isError && (
+            <p className="mt-4 text-sm font-medium text-red-600 dark:text-red-400">
+              {errorMessage(upload.error, "Upload failed")}
+            </p>
+          )}
+
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-surface-500">{preview.length - 1} links will be created</p>
-            <button onClick={handleProcess} disabled={processing} className="btn-primary">
-              {processing ? (
+            <p className="text-sm text-surface-500">{rowCount} links will be created</p>
+            <button
+              onClick={() => upload.mutate(file)}
+              disabled={upload.isPending || rowCount === 0 || rowCount > MAX_ROWS}
+              className="btn-primary"
+            >
+              {upload.isPending ? (
                 <Spinner size="sm" />
               ) : (
                 <>
@@ -227,24 +214,24 @@ export function BulkUploadPage() {
       )}
 
       {/* Results */}
-      {completed && (
+      {results && (
         <div className="space-y-4">
           {/* Summary */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="card text-center">
               <p className="text-3xl font-bold text-surface-900 dark:text-white">
-                {results.length}
+                {results.results.length}
               </p>
               <p className="text-sm text-surface-500">Total processed</p>
             </div>
             <div className="card text-center border-emerald-200 dark:border-emerald-800">
               <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                {successCount}
+                {results.created}
               </p>
               <p className="text-sm text-surface-500">Successful</p>
             </div>
             <div className="card text-center border-red-200 dark:border-red-800">
-              <p className="text-3xl font-bold text-red-600 dark:text-red-400">{errorCount}</p>
+              <p className="text-3xl font-bold text-red-600 dark:text-red-400">{results.failed}</p>
               <p className="text-sm text-surface-500">Failed</p>
             </div>
           </div>
@@ -263,7 +250,7 @@ export function BulkUploadPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
-                  {results.map((r) => (
+                  {results.results.map((r) => (
                     <tr key={r.row}>
                       <td className="px-3 py-2 text-surface-500">{r.row}</td>
                       <td className="px-3 py-2 text-surface-700 dark:text-surface-300 max-w-[200px] truncate">
@@ -281,7 +268,14 @@ export function BulkUploadPage() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-primary-600 dark:text-primary-400">
-                        {r.shortUrl || "—"}
+                        {r.shortUrl ? (
+                          <span className="flex items-center gap-1.5">
+                            {displayUrl(r.shortUrl)}
+                            <CopyButton text={r.shortUrl} label="" className="!text-xs" />
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -291,15 +285,7 @@ export function BulkUploadPage() {
           </div>
 
           <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setFile(null);
-                setPreview([]);
-                setResults([]);
-                setCompleted(false);
-              }}
-              className="btn-secondary"
-            >
+            <button onClick={reset} className="btn-secondary">
               Upload Another File
             </button>
             <Link to="/links" className="btn-primary">
@@ -323,12 +309,16 @@ export function BulkUploadPage() {
             ,{" "}
             <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
               title
-            </code>{" "}
-            (optional),{" "}
+            </code>
+            ,{" "}
             <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
               tags
             </code>{" "}
-            (optional)
+            and{" "}
+            <code className="rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-700">
+              custom_code
+            </code>{" "}
+            (all but url optional)
           </li>
           <li>
             • URLs must start with{" "}
@@ -340,7 +330,7 @@ export function BulkUploadPage() {
               https://
             </code>
           </li>
-          <li>• Maximum 500 rows per upload</li>
+          <li>• Maximum {MAX_ROWS} rows and 1 MB per upload, UTF-8 encoded</li>
           <li>• Tags should be comma-separated within quotes</li>
           <li>• Invalid rows will be skipped and reported in results</li>
         </ul>

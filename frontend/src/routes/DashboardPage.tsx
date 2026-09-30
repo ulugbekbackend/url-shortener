@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatNumber, formatDate, truncate } from "../lib/utils";
+import { capitalize, displayUrl, formatNumber, formatDate, truncate } from "../lib/utils";
 import { Spinner } from "../components/ui/Spinner";
 import { CopyButton } from "../components/ui/CopyButton";
-import type { DateRange } from "../types";
+import type { DateRange, Interval } from "../types";
 import {
   LineChart,
   Line,
@@ -31,10 +31,20 @@ const dateRanges: { label: string; value: DateRange; days: number }[] = [
   { label: "90d", value: "90d", days: 90 },
 ];
 
+function NoData({ className }: { className: string }) {
+  return (
+    <div
+      className={`flex items-center justify-center text-sm text-surface-500 dark:text-surface-400 ${className}`}
+    >
+      No clicks in this period yet
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const days = dateRanges.find((r) => r.value === dateRange)?.days || 30;
-  const interval = days <= 1 ? "hour" : days <= 30 ? "day" : "week";
+  const interval: Interval = days <= 1 ? "hour" : days <= 30 ? "day" : "week";
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ["stats", "overview"],
@@ -43,25 +53,25 @@ export function DashboardPage() {
 
   const { data: timeseries, isLoading: tsLoading } = useQuery({
     queryKey: ["stats", "timeseries", days, interval],
-    queryFn: () => api.stats.timeseries(undefined, days, interval as "hour" | "day" | "week"),
+    queryFn: () => api.stats.timeseries({ days, interval }),
   });
 
   const { data: countries, isLoading: countriesLoading } = useQuery({
-    queryKey: ["stats", "breakdown", "country"],
-    queryFn: () => api.stats.breakdown("all", "country"),
+    queryKey: ["stats", "breakdown", "country", days],
+    queryFn: () => api.stats.breakdown({ dimension: "country", days }),
   });
 
   const { data: devices, isLoading: devicesLoading } = useQuery({
-    queryKey: ["stats", "breakdown", "device"],
-    queryFn: () => api.stats.breakdown("all", "device"),
+    queryKey: ["stats", "breakdown", "device", days],
+    queryFn: () => api.stats.breakdown({ dimension: "device", days }),
   });
 
-  const { data: links } = useQuery({
-    queryKey: ["links"],
-    queryFn: () => api.links.list(),
+  const { data: topLinksPage } = useQuery({
+    queryKey: ["links", "top"],
+    queryFn: () => api.links.list({ sort: "clicks", pageSize: 5 }),
   });
 
-  const topLinks = links?.slice(0, 5) || [];
+  const topLinks = topLinksPage?.items ?? [];
 
   return (
     <div className="space-y-6">
@@ -209,6 +219,8 @@ export function DashboardPage() {
             <div className="flex h-64 items-center justify-center">
               <Spinner />
             </div>
+          ) : !devices?.length ? (
+            <NoData className="h-64" />
           ) : (
             <div className="flex flex-col items-center">
               <ResponsiveContainer width="100%" height={200}>
@@ -237,7 +249,9 @@ export function DashboardPage() {
                       className="h-3 w-3 rounded-full"
                       style={{ backgroundColor: COLORS[i % COLORS.length] }}
                     />
-                    <span className="text-surface-600 dark:text-surface-400">{d.name}</span>
+                    <span className="text-surface-600 dark:text-surface-400">
+                      {capitalize(d.name)}
+                    </span>
                     <span className="font-medium text-surface-900 dark:text-white">
                       {d.percentage}%
                     </span>
@@ -260,6 +274,8 @@ export function DashboardPage() {
             <div className="flex h-48 items-center justify-center">
               <Spinner />
             </div>
+          ) : !countries?.length ? (
+            <NoData className="h-48" />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={countries} layout="vertical">
@@ -309,7 +325,7 @@ export function DashboardPage() {
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-xs text-primary-600 dark:text-primary-400">
-                      {link.shortUrl}
+                      {displayUrl(link.shortUrl)}
                     </span>
                     <CopyButton text={link.shortUrl} label="" className="!text-xs" />
                   </div>

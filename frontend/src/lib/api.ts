@@ -1,217 +1,113 @@
-import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey } from "../types";
-import {
-  getUserLinks,
-  generateTimeSeries,
-  generateBreakdown,
-  generateStatsSummary,
-  generateApiKeys,
-} from "./mockData";
-import { useAuthStore } from "../stores/authStore";
+import type {
+  ApiKey,
+  BreakdownItem,
+  BulkImportResult,
+  Dimension,
+  Interval,
+  Link,
+  LinkChanges,
+  LinkInput,
+  LinkListParams,
+  OverviewStats,
+  Page,
+  QrOptions,
+  StatsQuery,
+  StatsSummary,
+  Tag,
+  TimeSeriesPoint,
+  User,
+} from "../types";
+import { ApiError, request } from "./http";
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** from_date for "the last N days"; the server defaults to_date to now */
+function since(days?: number) {
+  return days ? { fromDate: new Date(Date.now() - days * 86_400_000).toISOString() } : {};
+}
 
-function getCurrentUserId(): string {
-  const user = useAuthStore.getState().user;
-  return user?.id || "anonymous";
+function statsPath(linkId: string | undefined, kind: "timeseries" | "breakdown") {
+  return linkId ? `/stats/links/${linkId}/${kind}` : `/stats/${kind}`;
 }
 
 export const api = {
   auth: {
-    register: async (
-      email: string,
-      password: string,
-      name: string,
-    ): Promise<{
-      user: { id: string; name: string; email: string; plan: string };
-      token: string;
-    }> => {
-      await delay(600);
-      const id = `usr_${Date.now().toString(36)}`;
-      const token = `tok_${Math.random().toString(36).substring(2)}`;
-      return {
-        user: { id, name, email, plan: "free" },
-        token,
-      };
-    },
-    login: async (
-      email: string,
-      _password: string,
-    ): Promise<{
-      user: { id: string; name: string; email: string; plan: string };
-      token: string;
-    }> => {
-      await delay(600);
-      // Simulate finding user by email
-      const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> =
-        stored ? JSON.parse(stored) : {};
-
-      const user = Object.values(users).find((u) => u.email === email);
-      if (user) {
-        return {
-          user: { id: user.id, name: user.name, email: user.email, plan: "free" },
-          token: `tok_${Math.random().toString(36).substring(2)}`,
-        };
-      }
-      throw new Error("Invalid email or password");
-    },
-    saveUser: (user: { id: string; name: string; email: string; password: string }) => {
-      const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> =
-        stored ? JSON.parse(stored) : {};
-      users[user.id] = user;
-      localStorage.setItem("linkly-users", JSON.stringify(users));
-    },
+    register: (email: string, password: string, name: string) =>
+      request<User>("/auth/register", {
+        method: "POST",
+        body: { email, password, name },
+        auth: false,
+      }),
+    login: (email: string, password: string) =>
+      request<{ accessToken: string; user: User }>("/auth/login", {
+        method: "POST",
+        body: { email, password },
+        auth: false,
+      }),
+    logout: () => request<void>("/auth/logout", { method: "POST", auth: false }),
+    me: () => request<User>("/auth/me"),
+    updateProfile: (changes: { name?: string; email?: string }) =>
+      request<User>("/auth/me", { method: "PATCH", body: changes }),
+    /** Signs out every other session; returns fresh tokens for this one */
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ accessToken: string; user: User }>("/auth/change-password", {
+        method: "POST",
+        body: { currentPassword, newPassword },
+      }),
+    deleteAccount: (password: string) =>
+      request<void>("/auth/me", { method: "DELETE", body: { password } }),
   },
   links: {
-    list: async (params?: { search?: string; tag?: string; status?: string }): Promise<Link[]> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      let result = [...getUserLinks(userId)];
-
-      if (params?.search) {
-        const s = params.search.toLowerCase();
-        result = result.filter(
-          (l) =>
-            l.title?.toLowerCase().includes(s) ||
-            l.originalUrl.toLowerCase().includes(s) ||
-            l.code.toLowerCase().includes(s),
-        );
-      }
-      if (params?.tag) {
-        result = result.filter((l) => l.tags.includes(params.tag!));
-      }
-      if (params?.status === "active") result = result.filter((l) => l.isActive);
-      if (params?.status === "disabled") result = result.filter((l) => !l.isActive);
-      return result;
-    },
+    list: (params: LinkListParams = {}) => request<Page<Link>>("/links", { query: { ...params } }),
+    /** null when the link doesn't exist or isn't the user's */
     get: async (id: string): Promise<Link | null> => {
-      await delay(200);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const link = links.find((l) => l.id === id);
-      // Ownership check: only return if it belongs to current user
-      if (link && link.id.includes(userId)) {
-        return link;
+      try {
+        return await request<Link>(`/links/${id}`);
+      } catch (err) {
+        // 422: the id is not even a UUID
+        if (err instanceof ApiError && (err.status === 404 || err.status === 422)) return null;
+        throw err;
       }
-      // Also allow if user just created it (new links)
-      if (link) return link;
-      return null;
     },
-    create: async (data: {
-      url: string;
-      customCode?: string;
-      title?: string;
-      tags?: string[];
-    }): Promise<Link> => {
-      await delay(500);
-      const userId = getCurrentUserId();
-      const code = data.customCode || Math.random().toString(36).substring(2, 9);
-      const newLink: Link = {
-        id: `link_${userId}_${Date.now()}`,
-        code,
-        originalUrl: data.url,
-        shortUrl: `lnk.ly/${code}`,
-        title: data.title || null,
-        faviconUrl: `https://www.google.com/s2/favicons?domain=${new URL(data.url).hostname}&sz=32`,
-        tags: data.tags || [],
-        totalClicks: 0,
-        isActive: true,
-        isPermanent: false,
-        isCustom: !!data.customCode,
-        expiresAt: null,
-        maxClicks: null,
-        hasPassword: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      // Add to user's links
-      const links = getUserLinks(userId);
-      links.unshift(newLink);
-      return newLink;
+    create: (input: LinkInput) => request<Link>("/links", { method: "POST", body: input }),
+    update: (id: string, changes: LinkChanges) =>
+      request<Link>(`/links/${id}`, { method: "PATCH", body: changes }),
+    toggle: (link: Link) =>
+      request<Link>(`/links/${link.id}`, { method: "PATCH", body: { isActive: !link.isActive } }),
+    delete: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),
+    /** CSV with url, title, tags, custom_code columns; bad rows are reported, not fatal */
+    bulk: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return request<BulkImportResult>("/links/bulk", { method: "POST", form });
     },
-    delete: async (id: string): Promise<void> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const idx = links.findIndex((l) => l.id === id);
-      if (idx >= 0) links.splice(idx, 1);
-    },
-    toggle: async (id: string): Promise<Link> => {
-      await delay(200);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      const link = links.find((l) => l.id === id);
-      if (!link) throw new Error("Link not found");
-      link.isActive = !link.isActive;
-      link.updatedAt = new Date().toISOString();
-      return { ...link };
-    },
+    exportCsv: () => request<Blob>("/links/export", { responseType: "blob" }),
+    qr: (id: string, options: QrOptions) =>
+      request<Blob>(`/links/${id}/qr`, { query: { ...options }, responseType: "blob" }),
+  },
+  tags: {
+    list: () => request<Tag[]>("/tags"),
   },
   stats: {
-    summary: async (_linkId?: string): Promise<StatsSummary> => {
-      await delay(300);
-      return generateStatsSummary();
-    },
-    timeseries: async (
-      _linkId?: string,
-      days?: number,
-      interval?: "hour" | "day" | "week",
-    ): Promise<TimeSeriesPoint[]> => {
-      await delay(400);
-      return generateTimeSeries(days || 30, interval || "day");
-    },
-    breakdown: async (_linkId: string, dimension: string): Promise<BreakdownItem[]> => {
-      await delay(300);
-      return generateBreakdown(dimension);
-    },
-    overview: async (): Promise<{
-      totalLinks: number;
-      totalClicks: number;
-      clicksToday: number;
-      uniqueVisitors: number;
-    }> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      return {
-        totalLinks: links.length,
-        totalClicks: links.reduce((s, l) => s + l.totalClicks, 0),
-        clicksToday: Math.floor(Math.random() * 5000) + 1000,
-        uniqueVisitors: Math.floor(Math.random() * 3000) + 500,
-      };
-    },
+    overview: () => request<OverviewStats>("/stats/overview"),
+    summary: ({ linkId, days }: StatsQuery & { linkId: string }) =>
+      request<StatsSummary>(`/stats/links/${linkId}/summary`, { query: since(days) }),
+    timeseries: ({ linkId, days, includeBots, interval }: StatsQuery & { interval: Interval }) =>
+      request<TimeSeriesPoint[]>(statsPath(linkId, "timeseries"), {
+        query: { ...since(days), interval, includeBots },
+      }),
+    breakdown: ({ linkId, days, includeBots, dimension }: StatsQuery & { dimension: Dimension }) =>
+      request<BreakdownItem[]>(statsPath(linkId, "breakdown"), {
+        query: { ...since(days), dimension, includeBots },
+      }),
   },
   apiKeys: {
-    list: async (): Promise<ApiKey[]> => {
-      await delay(300);
-      return generateApiKeys();
-    },
-    create: async (name: string): Promise<{ key: ApiKey; fullKey: string }> => {
-      await delay(500);
-      const fullKey = `lnk_${Math.random().toString(36).substring(2, 10)}_${Date.now().toString(36)}`;
-      return {
-        key: {
-          id: `key_${Date.now()}`,
-          name,
-          prefix: fullKey.substring(0, 12) + "_",
-          lastUsedAt: null,
-          createdAt: new Date().toISOString(),
-          revokedAt: null,
-        },
-        fullKey,
-      };
-    },
-    revoke: async (id: string): Promise<void> => {
-      await delay(300);
-      void id;
-    },
+    list: () => request<ApiKey[]>("/api-keys"),
+    /** The full key is only ever returned here, once */
+    create: (name: string) =>
+      request<{ key: ApiKey; fullKey: string }>("/api-keys", { method: "POST", body: { name } }),
+    revoke: (id: string) => request<void>(`/api-keys/${id}`, { method: "DELETE" }),
   },
   shorten: {
-    anonymous: async (_url: string): Promise<{ shortUrl: string; code: string }> => {
-      await delay(600);
-      const code = Math.random().toString(36).substring(2, 9);
-      return { shortUrl: `lnk.ly/${code}`, code };
-    },
+    anonymous: (url: string) =>
+      request<Link>("/links/anonymous", { method: "POST", body: { url }, auth: false }),
   },
 };

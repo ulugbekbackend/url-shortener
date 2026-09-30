@@ -1,7 +1,9 @@
-import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense, useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { Spinner } from "./components/ui/Spinner";
+import { api } from "./lib/api";
+import { refreshAccessToken } from "./lib/http";
 import { useAuthStore } from "./stores/authStore";
 
 const LandingPage = lazy(() =>
@@ -37,14 +39,45 @@ function PageLoader() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  const status = useAuthStore((s) => s.status);
+  const guestRedirect = useAuthStore((s) => s.guestRedirect);
+  const location = useLocation();
+  if (status === "loading") return <PageLoader />;
+  if (status === "guest") {
+    // Only a lost session should bring the user back here after signing in again
+    const state = guestRedirect === "/login" ? { from: location } : undefined;
+    return <Navigate to={guestRedirect} replace state={state} />;
   }
   return <>{children}</>;
 }
 
+/** Restore the session from the refresh cookie once, when the app starts. */
+function useSessionRestore() {
+  const status = useAuthStore((s) => s.status);
+
+  useEffect(() => {
+    if (status !== "loading") return;
+    let cancelled = false;
+    (async () => {
+      const token = await refreshAccessToken();
+      try {
+        const user = token ? await api.auth.me() : null;
+        if (cancelled) return;
+        if (token && user) useAuthStore.getState().login(user, token);
+        else useAuthStore.getState().logout();
+      } catch {
+        if (!cancelled) useAuthStore.getState().logout();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+}
+
 function App() {
+  useSessionRestore();
+
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>

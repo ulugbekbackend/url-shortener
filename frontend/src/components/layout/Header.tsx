@@ -1,4 +1,6 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
 import { ThemeToggle } from "../ui/ThemeToggle";
@@ -14,11 +16,16 @@ export function Header() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const location = useLocation();
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // Sign out locally even if the server can't be reached
+    }
+    logout({ redirectTo: "/" });
+    queryClient.clear();
   };
 
   return (

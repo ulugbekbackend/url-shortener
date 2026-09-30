@@ -1,57 +1,53 @@
 import { create } from "zustand";
+import type { User } from "../types";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  plan: string;
-}
+type AuthStatus = "loading" | "authenticated" | "guest";
 
 interface AuthState {
+  /** "loading" until the session has been restored from the refresh cookie (or not). */
+  status: AuthStatus;
   isAuthenticated: boolean;
   user: User | null;
+  /** Kept in memory only; the httpOnly refresh cookie restores it after a reload. */
   accessToken: string | null;
+  /** Where protected pages send a guest: /login after a lost session, / after signing out */
+  guestRedirect: string;
   login: (user: User, token: string) => void;
-  logout: () => void;
-  updateProfile: (name: string, email: string) => void;
+  logout: (options?: { redirectTo?: string }) => void;
+  setToken: (token: string) => void;
+  setUser: (user: User) => void;
 }
 
-// Load from localStorage
-function getStoredAuth(): { user: User | null; token: string | null } {
-  try {
-    const stored = localStorage.getItem("linkly-auth");
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return { user: parsed.user, token: parsed.token };
-    }
-  } catch {
-    // ignore
-  }
-  return { user: null, token: null };
+// Older builds kept the session (and mock users) in localStorage; drop the leftovers
+try {
+  localStorage.removeItem("linkly-auth");
+  localStorage.removeItem("linkly-users");
+} catch {
+  // storage unavailable
 }
-
-const stored = getStoredAuth();
 
 export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: !!stored.user,
-  user: stored.user,
-  accessToken: stored.token,
-  login: (user, token) => {
-    localStorage.setItem("linkly-auth", JSON.stringify({ user, token }));
-    set({ isAuthenticated: true, user, accessToken: token });
-  },
-  logout: () => {
-    localStorage.removeItem("linkly-auth");
-    set({ isAuthenticated: false, user: null, accessToken: null });
-  },
-  updateProfile: (name, email) =>
-    set((state) => {
-      if (!state.user) return state;
-      const updated = { ...state.user, name, email };
-      localStorage.setItem(
-        "linkly-auth",
-        JSON.stringify({ user: updated, token: state.accessToken }),
-      );
-      return { user: updated };
+  status: "loading",
+  isAuthenticated: false,
+  user: null,
+  accessToken: null,
+  guestRedirect: "/login",
+  login: (user, token) =>
+    set({
+      status: "authenticated",
+      isAuthenticated: true,
+      user,
+      accessToken: token,
+      guestRedirect: "/login",
     }),
+  logout: (options) =>
+    set({
+      status: "guest",
+      isAuthenticated: false,
+      user: null,
+      accessToken: null,
+      guestRedirect: options?.redirectTo ?? "/login",
+    }),
+  setToken: (token) => set({ accessToken: token }),
+  setUser: (user) => set({ user }),
 }));

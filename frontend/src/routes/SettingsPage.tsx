@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { API_BASE, errorMessage } from "../lib/http";
 import { useAuthStore } from "../stores/authStore";
+import { useToastStore } from "../stores/toastStore";
 import { formatDate } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
@@ -51,6 +53,9 @@ export function SettingsPage() {
   );
 }
 
+/** Absolute API base for the copy-paste examples */
+const apiUrl = new URL(API_BASE, window.location.origin).href.replace(/\/$/, "");
+
 function ApiKeysSection() {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -62,17 +67,25 @@ function ApiKeysSection() {
     queryFn: api.apiKeys.list,
   });
 
+  const addToast = useToastStore((s) => s.addToast);
+  const onError = (err: unknown) => addToast(errorMessage(err), "error");
+
   const createMutation = useMutation({
     mutationFn: (name: string) => api.apiKeys.create(name),
     onSuccess: (data) => {
       setCreatedKey({ name: data.key.name, fullKey: data.fullKey });
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     },
+    onError,
   });
 
   const revokeMutation = useMutation({
     mutationFn: (id: string) => api.apiKeys.revoke(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["api-keys"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+      addToast("API key revoked", "success");
+    },
+    onError,
   });
 
   return (
@@ -114,7 +127,7 @@ function ApiKeysSection() {
               <div className="mt-3 rounded-lg bg-surface-900 p-3 dark:bg-surface-950">
                 <p className="mb-1 text-xs text-surface-400">Example usage:</p>
                 <code className="text-xs text-emerald-400">
-                  curl -H "X-API-Key: {createdKey.fullKey}" https://api.linkly.dev/v1/links
+                  curl -H "X-API-Key: {createdKey.fullKey}" {apiUrl}/links
                 </code>
               </div>
             </div>
@@ -166,7 +179,13 @@ function ApiKeysSection() {
                   </span>
                   {!key.revokedAt && (
                     <button
-                      onClick={() => revokeMutation.mutate(key.id)}
+                      onClick={() => {
+                        if (
+                          window.confirm(`Revoke "${key.name}"? Apps using it will stop working.`)
+                        ) {
+                          revokeMutation.mutate(key.id);
+                        }
+                      }}
                       className="btn-ghost !p-2 text-red-500 hover:!bg-red-50 dark:hover:!bg-red-900/20"
                       aria-label="Revoke key"
                     >
@@ -189,7 +208,7 @@ function ApiKeysSection() {
           <div className="rounded-lg bg-surface-900 p-4 dark:bg-surface-950">
             <p className="mb-2 text-xs text-surface-400"># Create a short link</p>
             <code className="block text-sm text-emerald-400 whitespace-pre-wrap">
-              {`curl -X POST https://api.linkly.dev/v1/links \\
+              {`curl -X POST ${apiUrl}/links \\
   -H "X-API-Key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"url": "https://example.com/long-url"}'`}
@@ -198,7 +217,7 @@ function ApiKeysSection() {
           <div className="rounded-lg bg-surface-900 p-4 dark:bg-surface-950">
             <p className="mb-2 text-xs text-surface-400"># Get link analytics</p>
             <code className="block text-sm text-emerald-400 whitespace-pre-wrap">
-              {`curl https://api.linkly.dev/v1/links/LINK_ID/stats/summary \\
+              {`curl ${apiUrl}/stats/links/LINK_ID/summary \\
   -H "X-API-Key: YOUR_API_KEY"`}
             </code>
           </div>
@@ -265,17 +284,19 @@ function ApiKeysSection() {
 }
 
 function ProfileSection() {
-  const { user, updateProfile } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [saved, setSaved] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateProfile(name, email);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
+  const profileMutation = useMutation({
+    mutationFn: () => api.auth.updateProfile({ name, email }),
+    onSuccess: (updated) => {
+      setUser(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    },
+  });
 
   return (
     <div className="max-w-lg space-y-6">
@@ -283,7 +304,14 @@ function ProfileSection() {
         <h2 className="mb-6 text-lg font-semibold text-surface-900 dark:text-white">
           Profile Information
         </h2>
-        <form onSubmit={handleSave} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            profileMutation.mutate();
+          }}
+          className="space-y-4"
+        >
+          <FormError error={profileMutation.error} />
           <div>
             <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
               Name
@@ -293,6 +321,8 @@ function ProfileSection() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="input-field"
+              required
+              maxLength={100}
             />
           </div>
           <div>
@@ -304,6 +334,7 @@ function ProfileSection() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="input-field"
+              required
             />
           </div>
           <div>
@@ -312,12 +343,11 @@ function ProfileSection() {
             </label>
             <div className="flex items-center gap-2">
               <Badge variant="info">{user?.plan || "free"}</Badge>
-              <span className="text-sm text-surface-500">Upgrade for more features</span>
             </div>
           </div>
           <div className="flex items-center gap-3 pt-2">
-            <button type="submit" className="btn-primary">
-              Save Changes
+            <button type="submit" disabled={profileMutation.isPending} className="btn-primary">
+              {profileMutation.isPending ? <Spinner size="sm" /> : "Save Changes"}
             </button>
             {saved && (
               <span className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400">
@@ -328,43 +358,176 @@ function ProfileSection() {
         </form>
       </div>
 
-      <div className="card">
-        <h2 className="mb-4 text-lg font-semibold text-surface-900 dark:text-white">
-          Change Password
-        </h2>
-        <form className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Current Password
-            </label>
-            <input type="password" className="input-field" />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              New Password
-            </label>
-            <input type="password" className="input-field" />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
-              Confirm New Password
-            </label>
-            <input type="password" className="input-field" />
-          </div>
-          <button type="submit" className="btn-primary">
-            Update Password
-          </button>
-        </form>
-      </div>
+      <ChangePasswordCard />
+      <DeleteAccountCard />
+    </div>
+  );
+}
 
-      <div className="card border-red-200 dark:border-red-800">
-        <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-400">Danger Zone</h2>
-        <p className="mb-4 text-sm text-surface-600 dark:text-surface-400">
-          Once you delete your account, there is no going back. All your links and analytics data
-          will be permanently removed.
-        </p>
-        <button className="btn-danger">Delete Account</button>
-      </div>
+function ChangePasswordCard() {
+  const login = useAuthStore((s) => s.login);
+  const addToast = useToastStore((s) => s.addToast);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const mismatch = confirm.length > 0 && next !== confirm;
+
+  const passwordMutation = useMutation({
+    mutationFn: () => api.auth.changePassword(current, next),
+    onSuccess: ({ accessToken, user }) => {
+      // The server ended every other session and issued new tokens for this one
+      login(user, accessToken);
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      addToast("Password updated. Other devices have been signed out.", "success");
+    },
+  });
+
+  return (
+    <div className="card">
+      <h2 className="mb-4 text-lg font-semibold text-surface-900 dark:text-white">
+        Change Password
+      </h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!mismatch) passwordMutation.mutate();
+        }}
+        className="space-y-4"
+      >
+        <FormError error={passwordMutation.error} />
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Current Password
+          </label>
+          <input
+            type="password"
+            value={current}
+            onChange={(e) => setCurrent(e.target.value)}
+            className="input-field"
+            autoComplete="current-password"
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            New Password
+          </label>
+          <input
+            type="password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            className="input-field"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700 dark:text-surface-300">
+            Confirm New Password
+          </label>
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="input-field"
+            autoComplete="new-password"
+            required
+          />
+          {mismatch && (
+            <p className="mt-1 text-xs text-red-600 dark:text-red-400">Passwords don't match</p>
+          )}
+        </div>
+        <button
+          type="submit"
+          disabled={passwordMutation.isPending || mismatch}
+          className="btn-primary"
+        >
+          {passwordMutation.isPending ? <Spinner size="sm" /> : "Update Password"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function DeleteAccountCard() {
+  const queryClient = useQueryClient();
+  const logout = useAuthStore((s) => s.logout);
+  const [confirming, setConfirming] = useState(false);
+  const [password, setPassword] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.auth.deleteAccount(password),
+    onSuccess: () => {
+      logout({ redirectTo: "/" });
+      queryClient.clear();
+    },
+  });
+
+  return (
+    <div className="card border-red-200 dark:border-red-800">
+      <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-400">Danger Zone</h2>
+      <p className="mb-4 text-sm text-surface-600 dark:text-surface-400">
+        Once you delete your account, there is no going back. All your links and analytics data will
+        be permanently removed.
+      </p>
+      {confirming ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            deleteMutation.mutate();
+          }}
+          className="space-y-3"
+        >
+          <FormError error={deleteMutation.error} />
+          <label
+            htmlFor="delete-account-password"
+            className="block text-sm font-medium text-surface-700 dark:text-surface-300"
+          >
+            Enter your password to confirm
+          </label>
+          <input
+            id="delete-account-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="input-field"
+            autoComplete="current-password"
+            autoFocus
+            required
+          />
+          <div className="flex gap-3">
+            <button type="submit" disabled={deleteMutation.isPending} className="btn-danger">
+              {deleteMutation.isPending ? <Spinner size="sm" /> : "Delete my account"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+                setPassword("");
+              }}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button onClick={() => setConfirming(true)} className="btn-danger">
+          Delete Account
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FormError({ error }: { error: unknown }) {
+  if (!error) return null;
+  return (
+    <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+      {errorMessage(error)}
     </div>
   );
 }

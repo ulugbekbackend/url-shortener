@@ -95,9 +95,12 @@ BACKEND_CORS_ORIGINS=["http://localhost:3000"]
 
 ### Frontend (.env)
 ```bash
-# API Configuration
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000
+# API origin; leave empty in development — the Vite dev server proxies /api to the backend
+VITE_API_URL=
+# Public base URL of short links (must match the backend BASE_URL)
+VITE_SHORT_BASE_URL=http://localhost:8000
+# Where the dev-server proxy forwards /api (never exposed to the browser)
+API_PROXY_TARGET=http://localhost:8000
 ```
 
 ## How to Run
@@ -143,8 +146,10 @@ database and set `GEOLITE2_PATH`; without it geolocation is simply skipped.
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev        # http://localhost:3000, /api is proxied to the backend
 ```
+The access token lives in memory only; after a reload the session is restored from the
+httpOnly refresh cookie. Set `COOKIE_SECURE=false` in `backend/.env` when serving over plain http.
 
 ## API Endpoints
 

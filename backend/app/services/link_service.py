@@ -1,6 +1,6 @@
 """Link service - business logic for links."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -78,6 +78,10 @@ class LinkService:
 
         # Hash password if provided
         password_hash = hash_password(password) if password else None
+
+        # Anonymous links are temporary; nobody could manage or delete them otherwise
+        if user_id is None and expires_at is None:
+            expires_at = datetime.now(UTC) + timedelta(days=settings.ANONYMOUS_LINK_TTL_DAYS)
 
         # Resolve tags up front: lazy-loading link.tags is not allowed in async
         tag_objs = []
