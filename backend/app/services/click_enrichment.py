@@ -5,8 +5,8 @@ import logging
 import os
 import re
 import uuid
-from datetime import date, datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import geoip2.database
@@ -14,7 +14,6 @@ import geoip2.errors
 from user_agents import parse as parse_user_agent
 
 from app.core.config import settings
-
 
 log = logging.getLogger(__name__)
 
@@ -30,13 +29,13 @@ class GeoLookup:
     """Country/city lookup from a local GeoLite2 City database; a no-op if the file is missing."""
 
     def __init__(self, path: str):
-        self._reader: Optional[geoip2.database.Reader] = None
+        self._reader: geoip2.database.Reader | None = None
         if path and os.path.exists(path):
             self._reader = geoip2.database.Reader(path)
         else:
             log.warning("GeoLite2 database not found at %r, geolocation disabled", path)
 
-    def lookup(self, ip: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    def lookup(self, ip: str | None) -> tuple[str | None, str | None]:
         if self._reader is None or not ip:
             return None, None
         try:
@@ -56,7 +55,7 @@ def visitor_hash(ip: str, user_agent: str, day: date) -> str:
     return hashlib.sha256(salt + f"{ip}|{user_agent}".encode()).hexdigest()
 
 
-def referrer_domain(referer: str) -> Optional[str]:
+def referrer_domain(referer: str) -> str | None:
     try:
         host = urlsplit(referer).hostname if referer else None
     except ValueError:
@@ -67,19 +66,19 @@ def referrer_domain(referer: str) -> Optional[str]:
     return host[4:] if host.startswith("www.") else host
 
 
-def _cut(value: Optional[str], length: int) -> Optional[str]:
+def _cut(value: str | None, length: int) -> str | None:
     return value[:length] if value else None
 
 
-def _known(family: str) -> Optional[str]:
+def _known(family: str) -> str | None:
     return None if family == "Other" else family
 
 
-def build_click(stream_id: str, fields: dict[str, str], geo: GeoLookup) -> Optional[dict[str, Any]]:
+def build_click(stream_id: str, fields: dict[str, str], geo: GeoLookup) -> dict[str, Any] | None:
     """Build a `clicks` row from a stream event, or None if the event is malformed."""
     try:
         link_id = uuid.UUID(fields["link_id"])
-        clicked_at = datetime.fromtimestamp(float(fields["timestamp"]), tz=timezone.utc)
+        clicked_at = datetime.fromtimestamp(float(fields["timestamp"]), tz=UTC)
     except (KeyError, ValueError):
         return None
 
@@ -99,7 +98,7 @@ def build_click(stream_id: str, fields: dict[str, str], geo: GeoLookup) -> Optio
 
     query = parse_qs(fields.get("query", ""))
 
-    def utm(name: str) -> Optional[str]:
+    def utm(name: str) -> str | None:
         return _cut(query.get(name, [None])[0], 100)
 
     ip = fields.get("ip") or None

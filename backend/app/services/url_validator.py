@@ -1,18 +1,16 @@
 """Validation of target URLs before they are shortened."""
 import ipaddress
 import re
-from typing import Optional
 from urllib.parse import urlsplit
 
 from app.core.config import settings
-
 
 _LOCAL_HOSTNAMES = {"localhost", "localhost.localdomain"}
 _LOCAL_SUFFIXES = (".localhost", ".local", ".internal")
 _HOSTNAME_RE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
 
 
-def _parse_ip(host: str) -> Optional[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+def _parse_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     """Parse an IP literal, including the decimal form browsers accept (http://2130706433)."""
     try:
         return ipaddress.ip_address(int(host) if host.isdigit() else host)

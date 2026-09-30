@@ -1,23 +1,26 @@
 """Links API endpoints."""
 import io
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 import segno
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.api.deps import get_current_user_or_api_key
+from app.core.database import get_db
+from app.models.models import Link, User
 from app.schemas.schemas import (
-    BulkImportResponse, LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
+    BulkImportResponse,
+    LinkAnonymous,
+    LinkCreate,
+    LinkListResponse,
+    LinkResponse,
+    LinkUpdate,
 )
 from app.services.bulk_service import MAX_FILE_BYTES, export_csv, import_links, parse_csv
 from app.services.link_service import LinkService, short_url
-from app.models.models import User, Link
-
 
 router = APIRouter(prefix="/links", tags=["links"])
 
@@ -94,9 +97,9 @@ async def create_link_anonymous(
 
 @router.get("", response_model=LinkListResponse)
 async def list_links(
-    search: Optional[str] = Query(None),
-    tag: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    search: str | None = Query(None),
+    tag: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     sort: str = Query("created"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),

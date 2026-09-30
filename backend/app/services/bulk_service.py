@@ -10,7 +10,6 @@ from app.models.models import Link
 from app.schemas.schemas import BulkRowResult, LinkCreate
 from app.services.link_service import LinkService, short_url
 
-
 MAX_ROWS = 500
 MAX_FILE_BYTES = 1024 * 1024
 EXPORT_COLUMNS = [

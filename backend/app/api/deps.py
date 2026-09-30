@@ -1,22 +1,21 @@
 """API dependencies."""
-from typing import Optional
+from datetime import UTC
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import decode_token, hash_token
-from app.models.models import User, ApiKey
-from sqlalchemy import select, and_
-
+from app.models.models import ApiKey, User
 
 security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Get current authenticated user from JWT token."""
@@ -53,9 +52,9 @@ async def get_current_user(
 
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Get current user if authenticated, None otherwise."""
     if not credentials:
         return None
@@ -75,7 +74,7 @@ async def get_current_user_optional(
 async def get_api_key(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Get user from API key if provided."""
     api_key = request.headers.get("X-API-Key")
     if not api_key:
@@ -96,8 +95,8 @@ async def get_api_key(
         return None
     
     # Update last used
-    from datetime import datetime, timezone
-    key_obj.last_used_at = datetime.now(timezone.utc)
+    from datetime import datetime
+    key_obj.last_used_at = datetime.now(UTC)
     await db.commit()
     
     result = await db.execute(select(User).where(User.id == key_obj.user_id))
@@ -105,7 +104,7 @@ async def get_api_key(
 
 
 async def get_current_user_or_api_key(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     request: Request = None,
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -135,8 +134,8 @@ async def get_current_user_or_api_key(
         )
         key_obj = result.scalar_one_or_none()
         if key_obj:
-            from datetime import datetime, timezone
-            key_obj.last_used_at = datetime.now(timezone.utc)
+            from datetime import datetime
+            key_obj.last_used_at = datetime.now(UTC)
             await db.commit()
             
             result = await db.execute(select(User).where(User.id == key_obj.user_id))

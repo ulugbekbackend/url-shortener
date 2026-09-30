@@ -1,19 +1,19 @@
 """Main FastAPI application."""
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from sqlalchemy import select
 
+from app.api import redirect
+from app.api.v1 import api_keys, auth, links, stats, tags
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import register_error_handlers
 from app.core.rate_limit import rate_limit_middleware
-from app.core.redis import get_redis, close_redis
-from app.api import redirect
-from app.api.v1 import auth, links, stats, api_keys, tags
+from app.core.redis import close_redis, get_redis
 
 
 @asynccontextmanager

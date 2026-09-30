@@ -1,16 +1,16 @@
 """API Keys endpoints."""
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.api.deps import get_current_user
+from app.core.database import get_db
 from app.core.security import generate_api_key
-from app.schemas.schemas import ApiKeyCreate, ApiKeyResponse, ApiKeyCreatedResponse
-from app.models.models import User, ApiKey
-
+from app.models.models import ApiKey, User
+from app.schemas.schemas import ApiKeyCreate, ApiKeyCreatedResponse, ApiKeyResponse
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
@@ -76,6 +76,6 @@ async def revoke_api_key(
             detail={"code": "API_KEY_NOT_FOUND", "message": "API key not found"},
         )
     
-    from datetime import datetime, timezone
-    key.revoked_at = datetime.now(timezone.utc)
+    from datetime import datetime
+    key.revoked_at = datetime.now(UTC)
     await db.commit()

@@ -8,7 +8,6 @@ from app.core.database import get_db
 from app.models.models import LinkTag, Tag, User
 from app.schemas.schemas import TagResponse
 
-
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 

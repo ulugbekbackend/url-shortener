@@ -1,10 +1,17 @@
 """SQLAlchemy models."""
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
 
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,9 +45,9 @@ class RefreshToken(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -56,8 +63,8 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     prefix: Mapped[str] = mapped_column(String(20), nullable=False)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
@@ -72,15 +79,15 @@ class Link(Base):
     )
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     is_custom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     original_url: Mapped[str] = mapped_column(Text, nullable=False)
-    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    favicon_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    max_clicks: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    favicon_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_clicks: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_permanent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     total_clicks: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
@@ -130,16 +137,16 @@ class Click(Base):
     stream_id: Mapped[str] = mapped_column(String(32), nullable=False)
     link_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("links.id", ondelete="CASCADE"), nullable=False)
     clicked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    visitor_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    country_code: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
-    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    device_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    os: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    browser: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    referrer_domain: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    utm_source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    utm_medium: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    utm_campaign: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    visitor_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    device_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    os: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    browser: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    referrer_domain: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    utm_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Relationships

@@ -29,7 +29,6 @@ from app.models.models import Click, Link, LinkDailyStats
 from app.services.click_enrichment import GeoLookup, build_click
 from app.services.link_service import CLICK_STREAM
 
-
 log = logging.getLogger("click_worker")
 
 GROUP = "click-workers"

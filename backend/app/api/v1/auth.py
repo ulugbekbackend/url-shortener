@@ -1,11 +1,12 @@
 """Auth API endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce
-from app.api.deps import get_current_user
+from app.models.models import User
 from app.schemas.schemas import (
     AccountDelete,
     PasswordChange,
@@ -16,8 +17,6 @@ from app.schemas.schemas import (
     UserUpdate,
 )
 from app.services.auth_service import AuthService
-from app.models.models import User
-
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

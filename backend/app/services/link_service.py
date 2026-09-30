@@ -1,9 +1,9 @@
 """Link service - business logic for links."""
 from datetime import datetime
-from typing import Any, Optional, List
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,7 +14,6 @@ from app.core.redis import get_redis
 from app.core.security import generate_code, hash_password
 from app.models.models import Link, Tag
 from app.services.url_validator import validate_target_url
-
 
 # Redis stream the redirect writes click events to and the click worker consumes
 CLICK_STREAM = "clicks"
@@ -52,13 +51,13 @@ class LinkService:
     async def create_link(
         self,
         url: str,
-        user_id: Optional[UUID] = None,
-        custom_code: Optional[str] = None,
-        title: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        expires_at: Optional[datetime] = None,
-        max_clicks: Optional[int] = None,
-        password: Optional[str] = None,
+        user_id: UUID | None = None,
+        custom_code: str | None = None,
+        title: str | None = None,
+        tags: list[str] | None = None,
+        expires_at: datetime | None = None,
+        max_clicks: int | None = None,
+        password: str | None = None,
         is_permanent: bool = False,
     ) -> Link:
         """Create a new link."""
@@ -132,14 +131,14 @@ class LinkService:
             await self.db.flush()
         return tag
     
-    async def get_link_by_code(self, code: str) -> Optional[Link]:
+    async def get_link_by_code(self, code: str) -> Link | None:
         """Get link by code."""
         result = await self.db.execute(
             select(Link).where(Link.code == code).options(selectinload(Link.tags))
         )
         return result.scalar_one_or_none()
     
-    async def get_link_by_id(self, link_id: UUID, user_id: Optional[UUID] = None) -> Optional[Link]:
+    async def get_link_by_id(self, link_id: UUID, user_id: UUID | None = None) -> Link | None:
         """Get link by ID, optionally filtered by user."""
         query = select(Link).where(Link.id == link_id).options(selectinload(Link.tags))
         if user_id:
@@ -147,7 +146,7 @@ class LinkService:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
-    async def all_links(self, user_id: UUID) -> List[Link]:
+    async def all_links(self, user_id: UUID) -> list[Link]:
         """Every link of a user, newest first (for export)."""
         result = await self.db.execute(
             select(Link)
@@ -160,13 +159,13 @@ class LinkService:
     async def list_links(
         self,
         user_id: UUID,
-        search: Optional[str] = None,
-        tag: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        tag: str | None = None,
+        status: str | None = None,
         sort: str = "created",
         page: int = 1,
         page_size: int = 20,
-    ) -> tuple[List[Link], int]:
+    ) -> tuple[list[Link], int]:
         """List links for a user with filters."""
         query = select(Link).where(Link.user_id == user_id).options(selectinload(Link.tags))
         count_query = select(func.count(Link.id)).where(Link.user_id == user_id)
@@ -214,7 +213,7 @@ class LinkService:
         link_id: UUID,
         user_id: UUID,
         changes: dict[str, Any],
-    ) -> Optional[Link]:
+    ) -> Link | None:
         """Apply the fields present in `changes`; None clears a nullable field."""
         link = await self.get_link_by_id(link_id, user_id)
         if not link:

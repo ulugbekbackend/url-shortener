@@ -1,6 +1,5 @@
 """Auth service - business logic for authentication."""
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, delete, select
@@ -11,12 +10,12 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.core.redis import get_redis
 from app.core.security import (
-    hash_password,
-    verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
     hash_token,
+    verify_password,
 )
 from app.models.models import Link, RefreshToken, User
 from app.services.link_service import click_counter_key, link_cache_key
@@ -50,7 +49,7 @@ class AuthService:
         await self.db.refresh(user)
         return user
     
-    async def login(self, email: str, password: str, user_agent: Optional[str] = None, ip: Optional[str] = None) -> tuple[str, str, User]:
+    async def login(self, email: str, password: str, user_agent: str | None = None, ip: str | None = None) -> tuple[str, str, User]:
         """Login a user and return (access_token, refresh_token, user)."""
         user = await self.get_user_by_email(email)
         if not user or not verify_password(password, user.password_hash):
@@ -62,12 +61,12 @@ class AuthService:
         return access_token, refresh_token, user
 
     def _issue_tokens(
-        self, user_id: UUID, user_agent: Optional[str], ip: Optional[str]
+        self, user_id: UUID, user_agent: str | None, ip: str | None
     ) -> tuple[str, str]:
         """Create an access/refresh pair and stage the refresh token for storage."""
         access_token = create_access_token({"sub": str(user_id)})
         refresh_token, token_hash = create_refresh_token({"sub": str(user_id)})
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         self.db.add(
             RefreshToken(
                 user_id=user_id,
@@ -80,7 +79,7 @@ class AuthService:
         return access_token, refresh_token
 
     async def update_profile(
-        self, user: User, name: Optional[str], email: Optional[str]
+        self, user: User, name: str | None, email: str | None
     ) -> User:
         """Change name and/or email; email must stay unique."""
         if name is not None:
@@ -102,8 +101,8 @@ class AuthService:
         user: User,
         current_password: str,
         new_password: str,
-        user_agent: Optional[str] = None,
-        ip: Optional[str] = None,
+        user_agent: str | None = None,
+        ip: str | None = None,
     ) -> tuple[str, str]:
         """Set a new password, end every other session and return a fresh token pair."""
         if not verify_password(current_password, user.password_hash):
@@ -131,7 +130,7 @@ class AuthService:
             keys += [click_counter_key(link_id) for link_id, _ in links]
             await redis.delete(*keys)
     
-    async def refresh(self, refresh_token: str, user_agent: Optional[str] = None, ip: Optional[str] = None) -> tuple[str, str]:
+    async def refresh(self, refresh_token: str, user_agent: str | None = None, ip: str | None = None) -> tuple[str, str]:
         """Refresh access token and rotate refresh token."""
         # Decode token
         payload = decode_token(refresh_token)
@@ -149,7 +148,7 @@ class AuthService:
                 and_(
                     RefreshToken.token_hash == token_hash,
                     RefreshToken.revoked_at.is_(None),
-                    RefreshToken.expires_at > datetime.now(timezone.utc),
+                    RefreshToken.expires_at > datetime.now(UTC),
                 )
             )
         )
@@ -161,14 +160,14 @@ class AuthService:
             raise ValueError("Refresh token reuse detected - all sessions revoked")
         
         # Revoke old token
-        stored_token.revoked_at = datetime.now(timezone.utc)
+        stored_token.revoked_at = datetime.now(UTC)
         
         # Create new tokens
         access_token = create_access_token({"sub": user_id})
         new_refresh_token, new_token_hash = create_refresh_token({"sub": user_id})
         
         # Store new refresh token
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         new_token_obj = RefreshToken(
             user_id=UUID(user_id),
             token_hash=new_token_hash,
@@ -189,15 +188,15 @@ class AuthService:
         )
         stored_token = result.scalar_one_or_none()
         if stored_token:
-            stored_token.revoked_at = datetime.now(timezone.utc)
+            stored_token.revoked_at = datetime.now(UTC)
             await self.db.commit()
     
-    async def get_user_by_id(self, user_id: UUID) -> Optional[User]:
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
         """Get user by ID."""
         result = await self.db.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
     
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str) -> User | None:
         """Get user by email."""
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
@@ -214,5 +213,5 @@ class AuthService:
         )
         tokens = result.scalars().all()
         for token in tokens:
-            token.revoked_at = datetime.now(timezone.utc)
+            token.revoked_at = datetime.now(UTC)
         await self.db.commit()

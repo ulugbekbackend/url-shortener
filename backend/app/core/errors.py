@@ -3,7 +3,7 @@
 Every error leaves the API as {"error": {"code": ..., "message": ..., "details"?: ...}}.
 """
 from http import HTTPStatus
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -20,8 +20,8 @@ class AppError(Exception):
         status_code: int,
         code: str,
         message: str,
-        details: Optional[dict[str, Any]] = None,
-        headers: Optional[dict[str, str]] = None,
+        details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ):
         super().__init__(message)
         self.status_code = status_code
@@ -31,7 +31,7 @@ class AppError(Exception):
         self.headers = headers
 
 
-def error_body(code: str, message: str, details: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the uniform error payload."""
     error: dict[str, Any] = {"code": code, "message": message}
     if details is not None:

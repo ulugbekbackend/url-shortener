@@ -1,11 +1,10 @@
 """Redis client management."""
-from typing import Optional
+
 from redis.asyncio import Redis, from_url
 
 from app.core.config import settings
 
-
-redis_client: Optional[Redis] = None
+redis_client: Redis | None = None
 
 
 async def get_redis() -> Redis:

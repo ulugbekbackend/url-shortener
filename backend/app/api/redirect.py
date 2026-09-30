@@ -5,7 +5,7 @@ is enforced atomically without touching the database on every hit.
 """
 import html
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import orjson
@@ -24,7 +24,6 @@ from app.services.link_service import (
     click_counter_key,
     link_cache_key,
 )
-
 
 router = APIRouter(tags=["redirect"])
 
@@ -74,7 +73,7 @@ async def _load_link(code: str) -> dict[str, Any]:
 def _ensure_available(data: dict[str, Any]) -> None:
     if not data["is_active"]:
         raise AppError(410, "LINK_DISABLED", "Link is disabled")
-    if data["expires_at"] and datetime.fromisoformat(data["expires_at"]) < datetime.now(timezone.utc):
+    if data["expires_at"] and datetime.fromisoformat(data["expires_at"]) < datetime.now(UTC):
         raise AppError(410, "LINK_EXPIRED", "Link has expired")
 
 
@@ -92,7 +91,7 @@ async def _register_click(request: Request, code: str, data: dict[str, Any]) -> 
         {
             "code": code,
             "link_id": data["link_id"],
-            "timestamp": str(datetime.now(timezone.utc).timestamp()),
+            "timestamp": str(datetime.now(UTC).timestamp()),
             "ip": request.client.host if request.client else "",
             "user_agent": request.headers.get("user-agent", ""),
             "referer": request.headers.get("referer", ""),

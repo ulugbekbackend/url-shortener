@@ -7,8 +7,8 @@ per-IP limits against password guessing. If Redis is unavailable requests are le
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
 
 from fastapi import Request, Response
 from fastapi.responses import ORJSONResponse
@@ -21,7 +21,6 @@ from app.core.errors import AppError, error_body
 from app.core.redis import get_redis
 from app.core.security import decode_token, hash_token
 from app.models.models import ApiKey
-
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +62,7 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def hit(bucket: str, limit: int, window: int) -> Optional[RateLimitResult]:
+async def hit(bucket: str, limit: int, window: int) -> RateLimitResult | None:
     """Count one request in `bucket`; None if Redis is unavailable (fail open)."""
     now_ms = int(time.time() * 1000)
     try:

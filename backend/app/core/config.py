@@ -1,6 +1,6 @@
 """Core configuration module."""
 import json
-from typing import Annotated, Any, List
+from typing import Annotated, Any
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = True
     
     # CORS
-    BACKEND_CORS_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
+    BACKEND_CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000", "http://localhost:5173"]
     
     # Rate Limiting
     RATE_LIMIT_ANONYMOUS: int = 100  # requests per hour
@@ -61,10 +61,10 @@ class Settings(BaseSettings):
     BASE_URL: str = "https://lnk.ly"
     
     # Blocked domains
-    BLOCKED_DOMAINS: Annotated[List[str], NoDecode] = []
+    BLOCKED_DOMAINS: Annotated[list[str], NoDecode] = []
     
     # Reserved words for custom codes
-    RESERVED_CODES: Annotated[List[str], NoDecode] = [
+    RESERVED_CODES: Annotated[list[str], NoDecode] = [
         "api", "docs", "health", "login", "admin", "register",
         "settings", "dashboard", "links", "auth", "static", "assets", "redoc"
     ]
