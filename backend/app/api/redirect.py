@@ -53,8 +53,8 @@ async def _load_link(code: str) -> dict[str, Any]:
         link = await LinkService(session).get_link_by_code(code)
 
     if not link:
-        await redis.setex(
-            link_cache_key(code), settings.NEGATIVE_CACHE_TTL, '{"status": "negative"}'
+        await redis.set(
+            link_cache_key(code), '{"status": "negative"}', ex=settings.NEGATIVE_CACHE_TTL
         )
         raise _not_found()
 
@@ -67,7 +67,7 @@ async def _load_link(code: str) -> dict[str, Any]:
         "max_clicks": link.max_clicks,
         "password_hash": link.password_hash,
     }
-    await redis.setex(link_cache_key(code), settings.LINK_CACHE_TTL, orjson.dumps(data))
+    await redis.set(link_cache_key(code), orjson.dumps(data), ex=settings.LINK_CACHE_TTL)
     # Seed the live counter from the DB total; NX keeps a counter that is already ahead
     await redis.set(click_counter_key(link.id), link.total_clicks, nx=True)
     return data

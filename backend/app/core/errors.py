@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -51,27 +51,27 @@ def register_error_handlers(app: FastAPI) -> None:
     """Install handlers that convert all errors to the uniform format."""
 
     @app.exception_handler(AppError)
-    async def handle_app_error(request: Request, exc: AppError) -> ORJSONResponse:
-        return ORJSONResponse(
+    async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
             error_body(exc.code, exc.message, exc.details),
             status_code=exc.status_code,
             headers=exc.headers,
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> ORJSONResponse:
+    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         if isinstance(exc.detail, dict) and "code" in exc.detail:
             body = {"error": exc.detail}
         else:
             body = error_body(_default_code(exc.status_code), str(exc.detail))
-        return ORJSONResponse(body, status_code=exc.status_code, headers=exc.headers)
+        return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         errors = jsonable_encoder(exc.errors())
         message = errors[0]["msg"] if errors else "Invalid request"
-        return ORJSONResponse(
+        return JSONResponse(
             error_body("VALIDATION_ERROR", message, {"errors": errors}), status_code=422
         )

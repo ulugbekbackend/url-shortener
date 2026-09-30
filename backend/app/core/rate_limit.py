@@ -12,7 +12,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from fastapi import Request, Response
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 from sqlalchemy import select
 
@@ -114,7 +114,7 @@ async def _api_key_valid(api_key: str) -> tuple[bool, str]:
                 select(ApiKey.id).where(ApiKey.key_hash == key_hash, ApiKey.revoked_at.is_(None))
             )
         cached = "1" if found else "0"
-        await redis.setex(cache_key, API_KEY_CACHE_TTL, cached)
+        await redis.set(cache_key, cached, ex=API_KEY_CACHE_TTL)
     return cached == "1", key_hash
 
 
@@ -152,7 +152,7 @@ async def rate_limit_middleware(
         return await call_next(request)
     if not result.allowed:
         error = _too_many(result)
-        return ORJSONResponse(
+        return JSONResponse(
             error_body(error.code, error.message, error.details),
             status_code=429,
             headers=result.headers,

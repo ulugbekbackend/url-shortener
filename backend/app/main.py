@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 from sqlalchemy import select
 
 from app.api import redirect
@@ -31,7 +30,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
 
