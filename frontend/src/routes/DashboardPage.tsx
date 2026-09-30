@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { formatNumber, formatDate, truncate } from "../lib/utils";
 import { Spinner } from "../components/ui/Spinner";
-import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import type { DateRange } from "../types";
 import {

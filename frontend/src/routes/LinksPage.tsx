@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatDate, formatNumber, truncate } from "../lib/utils";
+import { formatDate, formatNumber } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";

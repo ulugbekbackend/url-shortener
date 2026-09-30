@@ -6,18 +6,7 @@ import { formatDate } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
-import {
-  Key,
-  Plus,
-  Trash2,
-  AlertTriangle,
-  Copy,
-  User,
-  Shield,
-  X,
-  Check,
-  Terminal,
-} from "lucide-react";
+import { Key, Plus, Trash2, AlertTriangle, User, Shield, X, Check, Terminal } from "lucide-react";
 
 type Tab = "api-keys" | "profile";
 

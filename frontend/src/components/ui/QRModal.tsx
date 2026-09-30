@@ -7,7 +7,7 @@ interface QRModalProps {
   onClose: () => void;
 }
 
-export function QRModal({ url, code, onClose }: QRModalProps) {
+export function QRModal({ code, onClose }: QRModalProps) {
   const [fgColor, setFgColor] = useState("#1e40af");
   const [bgColor, setBgColor] = useState("#ffffff");
   const [size, setSize] = useState(256);

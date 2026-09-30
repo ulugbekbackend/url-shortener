@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { formatNumber, formatDate, getCountryFlag } from "../lib/utils";
+import { formatNumber, getCountryFlag } from "../lib/utils";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
@@ -16,8 +16,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
 } from "recharts";
 import {
   ArrowLeft,
@@ -33,7 +31,6 @@ import {
   Download,
   QrCode,
   Eye,
-  EyeOff,
 } from "lucide-react";
 
 const COLORS = [
@@ -348,7 +345,7 @@ export function LinkAnalyticsPage() {
             <Globe size={18} /> Top Countries
           </h3>
           <div className="space-y-3">
-            {countries?.map((item, i) => (
+            {countries?.map((item) => (
               <div key={item.name} className="flex items-center gap-3">
                 <span className="text-lg">{getCountryFlag(item.name)}</span>
                 <div className="flex-1">
