@@ -1,18 +1,19 @@
-FROM node:20-alpine
+# Node 24 is the active LTS (Node 20 reached end-of-life on 2026-04-30)
+FROM node:24-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Dependencies first, so code changes don't invalidate this layer
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# Install dependencies
-RUN npm ci
-
-# Copy application code
 COPY . .
 
-# Expose port
+# The official image ships an unprivileged "node" user
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
-# Run the application
+# Dev server, reachable from outside the container
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
