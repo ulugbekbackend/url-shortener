@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     LINK_CACHE_TTL: int = 86400  # 24 hours
     NEGATIVE_CACHE_TTL: int = 60  # 1 minute
 
+    # Links created without an account stop working after this many days
+    ANONYMOUS_LINK_TTL_DAYS: int = 7
+
     @field_validator("BACKEND_CORS_ORIGINS", "BLOCKED_DOMAINS", "RESERVED_CODES", mode="before")
     @classmethod
     def split_list(cls, v: Any) -> Any:
