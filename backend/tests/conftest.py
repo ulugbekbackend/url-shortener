@@ -15,9 +15,9 @@ from typing import Any
 # Must be set before the app (and its engine/settings) is imported
 os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5433/url_shortener_test",
+    "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/url_shortener_test",
 )
-os.environ["REDIS_URL"] = os.getenv("TEST_REDIS_URL", "redis://localhost:6379/15")
+os.environ["REDIS_URL"] = os.getenv("TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-at-least-32-bytes-long"
 os.environ["COOKIE_SECURE"] = "false"
 os.environ["BASE_URL"] = "http://short.test"

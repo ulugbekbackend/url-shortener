@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     WORKERS: int = 4
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/url_shortener"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/url_shortener"
 
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
 
     # Security
     SECRET_KEY: str
