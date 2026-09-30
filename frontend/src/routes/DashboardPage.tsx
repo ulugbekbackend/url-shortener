@@ -155,7 +155,7 @@ export function DashboardPage() {
                     borderRadius: "8px",
                     color: "#fff",
                   }}
-                  labelFormatter={(v) => new Date(v).toLocaleDateString()}
+                  labelFormatter={(v) => new Date(String(v)).toLocaleDateString()}
                 />
                 <Line
                   type="monotone"

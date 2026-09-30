@@ -259,7 +259,7 @@ export function LinkAnalyticsPage() {
               <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
               <Tooltip
                 contentStyle={{ backgroundColor: "var(--color-surface-800)", border: "none", borderRadius: "8px", color: "#fff" }}
-                labelFormatter={(v) => new Date(v).toLocaleString()}
+                labelFormatter={(v) => new Date(String(v)).toLocaleString()}
               />
               <Line type="monotone" dataKey="clicks" stroke="#3b82f6" strokeWidth={2.5} dot={false} name="Clicks" />
               <Line type="monotone" dataKey="uniqueVisitors" stroke="#8b5cf6" strokeWidth={2} dot={false} strokeDasharray="5 5" name="Unique" />
