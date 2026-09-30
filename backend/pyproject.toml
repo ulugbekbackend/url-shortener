@@ -32,8 +32,6 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.16.9",
     "mypy==2.3.1",
-    "fakeredis==2.38.0",
-    "aiosqlite==0.22.1",
 ]
 
 [tool.ruff]
