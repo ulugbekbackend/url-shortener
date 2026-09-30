@@ -1,54 +1,73 @@
-.PHONY: help dev test lint format up down clean
+.PHONY: help setup install dev up down logs test test-backend test-frontend test-db lint format clean \
+	shell-backend shell-frontend db-migrate db-rollback redis-cli psql
+
+# Backend virtualenv interpreter (Windows venvs use Scripts/, others bin/)
+PY := $(if $(wildcard backend/venv/Scripts/python.exe),venv/Scripts/python,venv/bin/python)
+COMPOSE := docker compose
 
 help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-dev: ## Start development environment
-	docker-compose up --build
+setup: ## Create the backend venv, then install everything
+	cd backend && python -m venv venv
+	@# Re-run make so PY is resolved again now that the venv exists
+	$(MAKE) install
 
-up: ## Start all services
-	docker-compose up -d
+install: ## Install backend (into backend/venv) and frontend dependencies
+	cd backend && $(PY) -m pip install -e ".[dev]"
+	cd frontend && npm ci
 
-down: ## Stop all services
-	docker-compose down
+dev: ## Build and start everything in Docker (foreground)
+	$(COMPOSE) up --build
 
-test: ## Run all tests
-	cd backend && uv run pytest
+up: ## Start everything in Docker (background)
+	$(COMPOSE) up -d
+
+down: ## Stop all containers
+	$(COMPOSE) down
+
+logs: ## Follow container logs
+	$(COMPOSE) logs -f
+
+test: test-backend test-frontend ## Run all tests
+
+test-db: ## Create the backend test database (needs the postgres container)
+	$(COMPOSE) exec -T postgres psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'url_shortener_test'" | grep -q 1 \
+		|| $(COMPOSE) exec -T postgres psql -U postgres -c "CREATE DATABASE url_shortener_test"
+
+test-backend: ## Backend tests against the compose PostgreSQL/Redis
+	cd backend && $(PY) -m pytest
+
+test-frontend: ## Frontend tests
 	cd frontend && npm test
 
-lint: ## Run linters
-	cd backend && uv run ruff check .
-	cd backend && uv run mypy app/
-	cd frontend && npm run typecheck
+lint: ## Lint and type-check backend and frontend
+	cd backend && $(PY) -m ruff check . && $(PY) -m ruff format --check . && $(PY) -m mypy app/
+	cd frontend && npm run lint && npm run typecheck && npm run format:check
 
-format: ## Format code
-	cd backend && uv run ruff format .
+format: ## Format backend and frontend code
+	cd backend && $(PY) -m ruff format . && $(PY) -m ruff check --fix .
 	cd frontend && npm run format
 
-clean: ## Clean up
-	docker-compose down -v
-	rm -rf backend/.pytest_cache
-	rm -rf backend/.mypy_cache
-	rm -rf backend/__pycache__
-	rm -rf frontend/node_modules/.vite
+clean: ## Stop containers, drop volumes and caches
+	$(COMPOSE) down -v
+	rm -rf backend/.pytest_cache backend/.mypy_cache backend/.ruff_cache
+	rm -rf frontend/dist frontend/node_modules/.vite
 
-logs: ## View logs
-	docker-compose logs -f
+shell-backend: ## Shell in the backend container
+	$(COMPOSE) exec backend bash
 
-shell-backend: ## Open backend shell
-	docker-compose exec backend bash
+shell-frontend: ## Shell in the frontend container
+	$(COMPOSE) exec frontend sh
 
-shell-frontend: ## Open frontend shell
-	docker-compose exec frontend sh
+db-migrate: ## Apply database migrations
+	$(COMPOSE) exec backend alembic upgrade head
 
-db-migrate: ## Run database migrations
-	docker-compose exec backend alembic upgrade head
+db-rollback: ## Roll back the last migration
+	$(COMPOSE) exec backend alembic downgrade -1
 
-db-rollback: ## Rollback last migration
-	docker-compose exec backend alembic downgrade -1
+redis-cli: ## Open the Redis CLI
+	$(COMPOSE) exec redis redis-cli
 
-redis-cli: ## Open Redis CLI
-	docker-compose exec redis redis-cli
-
-psql: ## Open PostgreSQL CLI
-	docker-compose exec postgres psql -U postgres -d url_shortener
+psql: ## Open the PostgreSQL CLI
+	$(COMPOSE) exec postgres psql -U postgres -d url_shortener

@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     WORKERS: int = 4
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5433/url_shortener"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5433/url_shortener"
 
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
 
     # Security
     SECRET_KEY: str
@@ -91,6 +91,16 @@ class Settings(BaseSettings):
 
     # Links created without an account stop working after this many days
     ANONYMOUS_LINK_TTL_DAYS: int = 7
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def secret_key_long_enough(cls, v: str) -> str:
+        """HS256 needs at least 32 bytes of key; shorter keys are brute-forceable."""
+        if len(v.encode()) < 32:
+            raise ValueError(
+                "SECRET_KEY must be at least 32 bytes (generate one with secrets.token_hex(32))"
+            )
+        return v
 
     @field_validator("BACKEND_CORS_ORIGINS", "BLOCKED_DOMAINS", "RESERVED_CODES", mode="before")
     @classmethod

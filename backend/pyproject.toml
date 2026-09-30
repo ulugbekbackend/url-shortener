@@ -32,8 +32,6 @@ dev = [
     "pytest-cov==7.1.0",
     "ruff==0.16.9",
     "mypy==2.3.1",
-    "fakeredis==2.38.0",
-    "aiosqlite==0.22.1",
 ]
 
 [tool.ruff]
@@ -44,6 +42,10 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "A", "SIM"]
+
+[tool.ruff.lint.isort]
+# ./alembic holds our migrations; the import is the third-party package
+known-third-party = ["alembic"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI dependency markers are meant to be used as argument defaults
@@ -64,7 +66,15 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# One event loop for the whole run: the app's engine and Redis client are module globals
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+# SQLAlchemy's async layer runs our code inside greenlets
+concurrency = ["greenlet", "thread"]
 
 [build-system]
 requires = ["hatchling==1.32.4"]
