@@ -9,7 +9,7 @@ from app.core.redis import get_redis
 from app.models.models import Click, Link, LinkDailyStats
 from app.services.click_enrichment import GeoLookup, build_click
 from app.services.link_service import CLICK_STREAM
-from app.workers.click_worker import store_batch
+from app.workers.click_worker import GROUP, ensure_group, read_batch, store_batch
 from tests.conftest import create_link
 
 API = "/api/v1"
@@ -145,3 +145,23 @@ async def test_account_overview_and_parameter_validation(
         f"{API}/stats/timeseries?interval=hour&from_date=2025-01-01T00:00:00Z", headers=h
     )
     assert too_many.status_code == 400 and too_many.json()["error"]["code"] == "RANGE_TOO_LARGE"
+
+
+async def test_consumer_group_delivers_new_events_and_reclaims_abandoned_ones(
+    client: httpx.AsyncClient, user: dict
+) -> None:
+    redis = await get_redis()
+    await ensure_group(redis)
+    await ensure_group(redis)  # idempotent: an existing group is fine
+
+    link = await create_link(client, user["headers"])
+    await click(client, link["code"], CHROME)
+
+    # A worker takes the event and dies before acknowledging it
+    [(event_id, _)] = await read_batch(redis, "dead-worker")
+    assert await read_batch(redis, "live-worker") == []  # nothing new, not idle long enough
+
+    # Once it has been pending long enough, another worker takes it over
+    await redis.xclaim(CLICK_STREAM, GROUP, "dead-worker", 0, [event_id], idle=120_000)
+    reclaimed = await read_batch(redis, "live-worker")
+    assert [eid for eid, _ in reclaimed] == [event_id]
