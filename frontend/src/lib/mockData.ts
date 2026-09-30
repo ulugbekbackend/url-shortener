@@ -1,11 +1,4 @@
-import type {
-  Link,
-  ClickEvent,
-  TimeSeriesPoint,
-  BreakdownItem,
-  StatsSummary,
-  ApiKey,
-} from "../types";
+import type { Link, TimeSeriesPoint, BreakdownItem, StatsSummary, ApiKey } from "../types";
 
 const domains = [
   "github.com",
@@ -56,7 +49,6 @@ const cities = [
   "Stockholm",
   "Seoul",
 ];
-const devices: Array<"desktop" | "mobile" | "tablet"> = ["desktop", "mobile", "tablet"];
 const oses = ["Windows", "macOS", "Linux", "iOS", "Android"];
 const browsers = ["Chrome", "Firefox", "Safari", "Edge", "Opera"];
 const referrers = [
@@ -210,7 +202,7 @@ export function generateTimeSeries(
 
 export function generateBreakdown(dimension: string, count: number = 8): BreakdownItem[] {
   const items: BreakdownItem[] = [];
-  let source: string[] = [];
+  let source: string[];
 
   switch (dimension) {
     case "country":

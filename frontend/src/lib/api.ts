@@ -208,7 +208,7 @@ export const api = {
     },
   },
   shorten: {
-    anonymous: async (url: string): Promise<{ shortUrl: string; code: string }> => {
+    anonymous: async (_url: string): Promise<{ shortUrl: string; code: string }> => {
       await delay(600);
       const code = Math.random().toString(36).substring(2, 9);
       return { shortUrl: `lnk.ly/${code}`, code };
