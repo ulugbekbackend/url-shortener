@@ -13,6 +13,7 @@ interface AuthState {
   accessToken: string | null;
   login: (user: User, token: string) => void;
   logout: () => void;
+  setToken: (token: string) => void;
   updateProfile: (name: string, email: string) => void;
 }
 
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem("linkly-auth", JSON.stringify({ user, token }));
     set({ isAuthenticated: true, user, accessToken: token });
   },
+  setToken: (token) => set({ accessToken: token }),
   logout: () => {
     localStorage.removeItem("linkly-auth");
     set({ isAuthenticated: false, user: null, accessToken: null });
