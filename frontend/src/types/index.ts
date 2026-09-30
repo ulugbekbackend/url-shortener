@@ -122,5 +122,23 @@ export interface ApiKey {
   revokedAt: string | null;
 }
 
+export interface OverviewStats {
+  totalLinks: number;
+  totalClicks: number;
+  clicksToday: number;
+  uniqueVisitors: number;
+}
+
+export type Dimension =
+  "country" | "city" | "device" | "os" | "browser" | "referrer" | "utm_source";
+
+export interface StatsQuery {
+  /** A single link; omitted means all of the user's links */
+  linkId?: string;
+  /** Only the last N days; omitted means all time */
+  days?: number;
+  includeBots?: boolean;
+}
+
 export type DateRange = "24h" | "7d" | "30d" | "90d" | "custom";
 export type Interval = "hour" | "day" | "week";

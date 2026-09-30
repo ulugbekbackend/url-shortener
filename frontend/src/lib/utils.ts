@@ -31,6 +31,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(href);
 }
 
+export function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }

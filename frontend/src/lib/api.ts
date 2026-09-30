@@ -1,32 +1,33 @@
 import type {
   ApiKey,
   BreakdownItem,
+  Dimension,
+  Interval,
   Link,
   LinkChanges,
   LinkInput,
   LinkListParams,
+  OverviewStats,
   Page,
   QrOptions,
+  StatsQuery,
   StatsSummary,
   Tag,
   TimeSeriesPoint,
   User,
 } from "../types";
 import { ApiError, request } from "./http";
-import {
-  getUserLinks,
-  generateTimeSeries,
-  generateBreakdown,
-  generateStatsSummary,
-  generateApiKeys,
-} from "./mockData";
-import { useAuthStore } from "../stores/authStore";
+import { generateApiKeys } from "./mockData";
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function getCurrentUserId(): string {
-  const user = useAuthStore.getState().user;
-  return user?.id || "anonymous";
+/** from_date for "the last N days"; the server defaults to_date to now */
+function since(days?: number) {
+  return days ? { fromDate: new Date(Date.now() - days * 86_400_000).toISOString() } : {};
+}
+
+function statsPath(linkId: string | undefined, kind: "timeseries" | "breakdown") {
+  return linkId ? `/stats/links/${linkId}/${kind}` : `/stats/${kind}`;
 }
 
 export const api = {
@@ -71,38 +72,17 @@ export const api = {
     list: () => request<Tag[]>("/tags"),
   },
   stats: {
-    summary: async (_linkId?: string): Promise<StatsSummary> => {
-      await delay(300);
-      return generateStatsSummary();
-    },
-    timeseries: async (
-      _linkId?: string,
-      days?: number,
-      interval?: "hour" | "day" | "week",
-    ): Promise<TimeSeriesPoint[]> => {
-      await delay(400);
-      return generateTimeSeries(days || 30, interval || "day");
-    },
-    breakdown: async (_linkId: string, dimension: string): Promise<BreakdownItem[]> => {
-      await delay(300);
-      return generateBreakdown(dimension);
-    },
-    overview: async (): Promise<{
-      totalLinks: number;
-      totalClicks: number;
-      clicksToday: number;
-      uniqueVisitors: number;
-    }> => {
-      await delay(300);
-      const userId = getCurrentUserId();
-      const links = getUserLinks(userId);
-      return {
-        totalLinks: links.length,
-        totalClicks: links.reduce((s, l) => s + l.totalClicks, 0),
-        clicksToday: Math.floor(Math.random() * 5000) + 1000,
-        uniqueVisitors: Math.floor(Math.random() * 3000) + 500,
-      };
-    },
+    overview: () => request<OverviewStats>("/stats/overview"),
+    summary: ({ linkId, days }: StatsQuery & { linkId: string }) =>
+      request<StatsSummary>(`/stats/links/${linkId}/summary`, { query: since(days) }),
+    timeseries: ({ linkId, days, includeBots, interval }: StatsQuery & { interval: Interval }) =>
+      request<TimeSeriesPoint[]>(statsPath(linkId, "timeseries"), {
+        query: { ...since(days), interval, includeBots },
+      }),
+    breakdown: ({ linkId, days, includeBots, dimension }: StatsQuery & { dimension: Dimension }) =>
+      request<BreakdownItem[]>(statsPath(linkId, "breakdown"), {
+        query: { ...since(days), dimension, includeBots },
+      }),
   },
   apiKeys: {
     list: async (): Promise<ApiKey[]> => {

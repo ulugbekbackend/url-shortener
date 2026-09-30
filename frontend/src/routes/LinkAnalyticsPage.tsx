@@ -7,7 +7,7 @@ import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
 import { QRModal } from "../components/ui/QRModal";
-import type { DateRange, Interval } from "../types";
+import type { DateRange, Dimension, Interval } from "../types";
 import {
   LineChart,
   Line,
@@ -28,7 +28,6 @@ import {
   MousePointerClick,
   Users,
   Bot,
-  Download,
   QrCode,
   Eye,
 } from "lucide-react";
@@ -44,12 +43,34 @@ const COLORS = [
   "#14b8a6",
 ];
 
+const RANGE_DAYS: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30, "90d": 90 };
+
+function useBreakdown(
+  linkId: string | undefined,
+  dimension: Dimension,
+  days: number,
+  includeBots: boolean,
+) {
+  return useQuery({
+    queryKey: ["stats", "breakdown", linkId, dimension, days, includeBots],
+    queryFn: () => api.stats.breakdown({ linkId, dimension, days, includeBots }),
+    enabled: !!linkId,
+  });
+}
+
+function NoData() {
+  return <p className="text-sm text-surface-500 dark:text-surface-400">No data for this period</p>;
+}
+
 export function LinkAnalyticsPage() {
   const { id } = useParams<{ id: string }>();
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const [interval, setInterval] = useState<Interval>("day");
   const [showBots, setShowBots] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const days = RANGE_DAYS[dateRange] ?? 30;
+  // Hourly buckets over 90 days are more than the API serves
+  const effectiveInterval: Interval = dateRange === "90d" && interval === "hour" ? "day" : interval;
 
   const { data: link, isLoading: linkLoading } = useQuery({
     queryKey: ["link", id],
@@ -58,53 +79,31 @@ export function LinkAnalyticsPage() {
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ["stats", "summary", id],
-    queryFn: () => api.stats.summary(id),
-    enabled: !!id,
+    queryKey: ["stats", "summary", id, days],
+    queryFn: () => api.stats.summary({ linkId: id!, days }),
+    enabled: !!link,
     refetchInterval: 10000,
     refetchIntervalInBackground: false,
   });
 
   const { data: timeseries, isLoading: tsLoading } = useQuery({
-    queryKey: ["stats", "timeseries", id, dateRange, interval],
+    queryKey: ["stats", "timeseries", id, days, effectiveInterval, showBots],
     queryFn: () =>
-      api.stats.timeseries(
-        id,
-        dateRange === "24h" ? 1 : dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90,
-        interval,
-      ),
-    enabled: !!id,
+      api.stats.timeseries({
+        linkId: id,
+        days,
+        interval: effectiveInterval,
+        includeBots: showBots,
+      }),
+    enabled: !!link,
   });
 
-  const { data: countries } = useQuery({
-    queryKey: ["stats", "breakdown", id, "country"],
-    queryFn: () => api.stats.breakdown(id!, "country"),
-    enabled: !!id,
-  });
-
-  const { data: browsers } = useQuery({
-    queryKey: ["stats", "breakdown", id, "browser"],
-    queryFn: () => api.stats.breakdown(id!, "browser"),
-    enabled: !!id,
-  });
-
-  const { data: referrers } = useQuery({
-    queryKey: ["stats", "breakdown", id, "referrer"],
-    queryFn: () => api.stats.breakdown(id!, "referrer"),
-    enabled: !!id,
-  });
-
-  const { data: devices } = useQuery({
-    queryKey: ["stats", "breakdown", id, "device"],
-    queryFn: () => api.stats.breakdown(id!, "device"),
-    enabled: !!id,
-  });
-
-  const { data: osData } = useQuery({
-    queryKey: ["stats", "breakdown", id, "os"],
-    queryFn: () => api.stats.breakdown(id!, "os"),
-    enabled: !!id,
-  });
+  const statsLinkId = link ? id : undefined;
+  const { data: countries } = useBreakdown(statsLinkId, "country", days, showBots);
+  const { data: browsers } = useBreakdown(statsLinkId, "browser", days, showBots);
+  const { data: referrers } = useBreakdown(statsLinkId, "referrer", days, showBots);
+  const { data: devices } = useBreakdown(statsLinkId, "device", days, showBots);
+  const { data: osData } = useBreakdown(statsLinkId, "os", days, showBots);
 
   if (linkLoading) {
     return (
@@ -208,8 +207,12 @@ export function LinkAnalyticsPage() {
               <button
                 key={i}
                 onClick={() => setInterval(i)}
+                disabled={i === "hour" && dateRange === "90d"}
+                title={
+                  i === "hour" && dateRange === "90d" ? "Not available for 90 days" : undefined
+                }
                 className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
-                  interval === i
+                  effectiveInterval === i
                     ? "bg-primary-600 text-white"
                     : "text-surface-600 hover:bg-surface-100 dark:text-surface-400 dark:hover:bg-surface-700"
                 }`}
@@ -222,10 +225,7 @@ export function LinkAnalyticsPage() {
             onClick={() => setShowBots(!showBots)}
             className={`btn-secondary ${showBots ? "!border-amber-500 !text-amber-600 dark:!text-amber-400" : ""}`}
           >
-            <Bot size={16} /> {showBots ? "Showing Bots" : "Hide Bots"}
-          </button>
-          <button className="btn-secondary">
-            <Download size={16} /> Export CSV
+            <Bot size={16} /> {showBots ? "Bots included" : "Bots excluded"}
           </button>
         </div>
       </div>
@@ -298,7 +298,7 @@ export function LinkAnalyticsPage() {
                 dataKey="date"
                 tickFormatter={(v) => {
                   const d = new Date(v);
-                  return interval === "hour"
+                  return effectiveInterval === "hour"
                     ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                     : d.toLocaleDateString([], { month: "short", day: "numeric" });
                 }}
@@ -345,6 +345,7 @@ export function LinkAnalyticsPage() {
             <Globe size={18} /> Top Countries
           </h3>
           <div className="space-y-3">
+            {countries?.length === 0 && <NoData />}
             {countries?.map((item) => (
               <div key={item.name} className="flex items-center gap-3">
                 <span className="text-lg">{getCountryFlag(item.name)}</span>
@@ -375,6 +376,7 @@ export function LinkAnalyticsPage() {
             <Monitor size={18} /> Browsers
           </h3>
           <div className="space-y-3">
+            {browsers?.length === 0 && <NoData />}
             {browsers?.map((item, i) => (
               <div key={item.name} className="flex items-center gap-3">
                 <div
@@ -417,9 +419,9 @@ export function LinkAnalyticsPage() {
           </h3>
           <div className="grid grid-cols-3 gap-4">
             {[
-              { name: "Desktop", icon: Monitor, data: devices?.find((d) => d.name === "Desktop") },
-              { name: "Mobile", icon: Smartphone, data: devices?.find((d) => d.name === "Mobile") },
-              { name: "Tablet", icon: Tablet, data: devices?.find((d) => d.name === "Tablet") },
+              { name: "Desktop", icon: Monitor, data: devices?.find((d) => d.name === "desktop") },
+              { name: "Mobile", icon: Smartphone, data: devices?.find((d) => d.name === "mobile") },
+              { name: "Tablet", icon: Tablet, data: devices?.find((d) => d.name === "tablet") },
             ].map((d) => {
               const Icon = d.icon;
               return (
@@ -443,6 +445,7 @@ export function LinkAnalyticsPage() {
             <Eye size={18} /> Top Referrers
           </h3>
           <div className="space-y-3">
+            {referrers?.length === 0 && <NoData />}
             {referrers?.map((item) => (
               <div
                 key={item.name}
@@ -468,6 +471,7 @@ export function LinkAnalyticsPage() {
         <h3 className="mb-4 text-lg font-semibold text-surface-900 dark:text-white">
           Operating Systems
         </h3>
+        {osData?.length === 0 && <NoData />}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {osData?.map((item, i) => (
             <div

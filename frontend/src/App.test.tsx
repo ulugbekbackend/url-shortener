@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -141,5 +141,58 @@ describe("protected routes", () => {
   it("renders link analytics for an unknown link", async () => {
     renderAt("/links/does-not-exist");
     expect(await screen.findByText(/link not found/i)).toBeInTheDocument();
+  });
+
+  it("shows account totals on the dashboard", async () => {
+    mockApi({
+      "GET /links": linkPage(),
+      "GET /stats/overview": {
+        total_links: 7,
+        total_clicks: 1234,
+        clicks_today: 56,
+        unique_visitors: 890,
+      },
+      "GET /stats/timeseries": [],
+      "GET /stats/breakdown": [],
+    });
+    renderAt("/dashboard");
+    expect(await screen.findByText("1.2K")).toBeInTheDocument();
+    expect(screen.getByText("890")).toBeInTheDocument();
+    expect(await screen.findAllByText("No clicks in this period yet")).toHaveLength(2);
+  });
+
+  it("shows link stats and re-queries with bots when asked", async () => {
+    const breakdownQueries: URLSearchParams[] = [];
+    const statsBase = `/stats/links/${linkFixture.id}`;
+    mockApi({
+      [`GET /links/${linkFixture.id}`]: linkFixture,
+      [`GET ${statsBase}/summary`]: {
+        total_clicks: 42,
+        unique_visitors: 30,
+        bot_clicks: 5,
+        avg_clicks_per_day: 1.4,
+      },
+      [`GET ${statsBase}/timeseries`]: [],
+      [`GET ${statsBase}/breakdown`]: ({ url }) => {
+        breakdownQueries.push(url.searchParams);
+        return url.searchParams.get("dimension") === "device"
+          ? Response.json([{ name: "mobile", count: 30, percentage: 100 }])
+          : Response.json([]);
+      },
+    });
+    renderAt(`/links/${linkFixture.id}`);
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Example page" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("30")).toBeInTheDocument(); // unique visitors
+    expect(await screen.findByText("100%")).toBeInTheDocument(); // mobile, matched case-insensitively
+    expect(breakdownQueries.every((q) => q.get("include_bots") === "false")).toBe(true);
+
+    await userEvent.click(screen.getByRole("button", { name: /bots excluded/i }));
+    await screen.findByRole("button", { name: /bots included/i });
+    await waitFor(() =>
+      expect(breakdownQueries.some((q) => q.get("include_bots") === "true")).toBe(true),
+    );
   });
 });
