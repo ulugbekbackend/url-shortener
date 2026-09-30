@@ -10,13 +10,13 @@ export function ToastContainer() {
     <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2" aria-live="polite">
       {toasts.map((toast) => {
         const Icon =
-          toast.type === "success" ? CheckCircle2 :
-          toast.type === "error" ? AlertCircle :
-          Info;
+          toast.type === "success" ? CheckCircle2 : toast.type === "error" ? AlertCircle : Info;
         const colors =
-          toast.type === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" :
-          toast.type === "error" ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300" :
-          "border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-300";
+          toast.type === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+            : toast.type === "error"
+              ? "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300"
+              : "border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-800 dark:bg-primary-900/30 dark:text-primary-300";
 
         return (
           <div

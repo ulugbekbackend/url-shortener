@@ -19,7 +19,10 @@ function renderAt(path: string) {
 function signIn() {
   useAuthStore
     .getState()
-    .login({ id: "usr_test", name: "Test User", email: "test@example.com", plan: "free" }, "tok_test");
+    .login(
+      { id: "usr_test", name: "Test User", email: "test@example.com", plan: "free" },
+      "tok_test",
+    );
 }
 
 afterEach(() => {

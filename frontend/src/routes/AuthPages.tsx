@@ -93,21 +93,31 @@ export function LoginPage() {
                 <input type="checkbox" className="rounded border-surface-300 accent-primary-600" />
                 Remember me
               </label>
-              <button type="button" className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+              <button
+                type="button"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+              >
                 Forgot password?
               </button>
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? <Spinner size="sm" /> : (
-                <>Sign in <ArrowRight size={16} /></>
+              {loading ? (
+                <Spinner size="sm" />
+              ) : (
+                <>
+                  Sign in <ArrowRight size={16} />
+                </>
               )}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-surface-600 dark:text-surface-400">
             Don't have an account?{" "}
-            <Link to="/register" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            <Link
+              to="/register"
+              className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+            >
               Sign up
             </Link>
           </p>
@@ -227,15 +237,22 @@ export function RegisterPage() {
             </div>
 
             <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? <Spinner size="sm" /> : (
-                <>Create account <ArrowRight size={16} /></>
+              {loading ? (
+                <Spinner size="sm" />
+              ) : (
+                <>
+                  Create account <ArrowRight size={16} />
+                </>
               )}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-surface-600 dark:text-surface-400">
             Already have an account?{" "}
-            <Link to="/login" className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            <Link
+              to="/login"
+              className="font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+            >
               Sign in
             </Link>
           </p>

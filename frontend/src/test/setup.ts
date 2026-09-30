@@ -25,7 +25,8 @@ class IntersectionObserverStub {
 }
 
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
-globalThis.IntersectionObserver ??= IntersectionObserverStub as unknown as typeof IntersectionObserver;
+globalThis.IntersectionObserver ??=
+  IntersectionObserverStub as unknown as typeof IntersectionObserver;
 window.matchMedia ??= (query: string) =>
   ({
     matches: false,

@@ -17,7 +17,14 @@ function getCurrentUserId(): string {
 
 export const api = {
   auth: {
-    register: async (email: string, password: string, name: string): Promise<{ user: { id: string; name: string; email: string; plan: string }; token: string }> => {
+    register: async (
+      email: string,
+      password: string,
+      name: string,
+    ): Promise<{
+      user: { id: string; name: string; email: string; plan: string };
+      token: string;
+    }> => {
       await delay(600);
       const id = `usr_${Date.now().toString(36)}`;
       const token = `tok_${Math.random().toString(36).substring(2)}`;
@@ -26,12 +33,19 @@ export const api = {
         token,
       };
     },
-    login: async (email: string, _password: string): Promise<{ user: { id: string; name: string; email: string; plan: string }; token: string }> => {
+    login: async (
+      email: string,
+      _password: string,
+    ): Promise<{
+      user: { id: string; name: string; email: string; plan: string };
+      token: string;
+    }> => {
       await delay(600);
       // Simulate finding user by email
       const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> = stored ? JSON.parse(stored) : {};
-      
+      const users: Record<string, { id: string; name: string; email: string; password: string }> =
+        stored ? JSON.parse(stored) : {};
+
       const user = Object.values(users).find((u) => u.email === email);
       if (user) {
         return {
@@ -43,7 +57,8 @@ export const api = {
     },
     saveUser: (user: { id: string; name: string; email: string; password: string }) => {
       const stored = localStorage.getItem("linkly-users");
-      const users: Record<string, { id: string; name: string; email: string; password: string }> = stored ? JSON.parse(stored) : {};
+      const users: Record<string, { id: string; name: string; email: string; password: string }> =
+        stored ? JSON.parse(stored) : {};
       users[user.id] = user;
       localStorage.setItem("linkly-users", JSON.stringify(users));
     },
@@ -53,14 +68,14 @@ export const api = {
       await delay(300);
       const userId = getCurrentUserId();
       let result = [...getUserLinks(userId)];
-      
+
       if (params?.search) {
         const s = params.search.toLowerCase();
         result = result.filter(
           (l) =>
             l.title?.toLowerCase().includes(s) ||
             l.originalUrl.toLowerCase().includes(s) ||
-            l.code.toLowerCase().includes(s)
+            l.code.toLowerCase().includes(s),
         );
       }
       if (params?.tag) {
@@ -83,7 +98,12 @@ export const api = {
       if (link) return link;
       return null;
     },
-    create: async (data: { url: string; customCode?: string; title?: string; tags?: string[] }): Promise<Link> => {
+    create: async (data: {
+      url: string;
+      customCode?: string;
+      title?: string;
+      tags?: string[];
+    }): Promise<Link> => {
       await delay(500);
       const userId = getCurrentUserId();
       const code = data.customCode || Math.random().toString(36).substring(2, 9);
@@ -133,7 +153,11 @@ export const api = {
       await delay(300);
       return generateStatsSummary();
     },
-    timeseries: async (_linkId?: string, days?: number, interval?: "hour" | "day" | "week"): Promise<TimeSeriesPoint[]> => {
+    timeseries: async (
+      _linkId?: string,
+      days?: number,
+      interval?: "hour" | "day" | "week",
+    ): Promise<TimeSeriesPoint[]> => {
       await delay(400);
       return generateTimeSeries(days || 30, interval || "day");
     },
@@ -141,7 +165,12 @@ export const api = {
       await delay(300);
       return generateBreakdown(dimension);
     },
-    overview: async (): Promise<{ totalLinks: number; totalClicks: number; clicksToday: number; uniqueVisitors: number }> => {
+    overview: async (): Promise<{
+      totalLinks: number;
+      totalClicks: number;
+      clicksToday: number;
+      uniqueVisitors: number;
+    }> => {
       await delay(300);
       const userId = getCurrentUserId();
       const links = getUserLinks(userId);

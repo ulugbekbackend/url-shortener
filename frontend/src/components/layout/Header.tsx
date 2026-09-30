@@ -2,15 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../stores/authStore";
 import { useUIStore } from "../../stores/uiStore";
 import { ThemeToggle } from "../ui/ThemeToggle";
-import {
-  LayoutDashboard,
-  Link2,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-  Zap,
-} from "lucide-react";
+import { LayoutDashboard, Link2, Settings, LogOut, Menu, X, Zap } from "lucide-react";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -44,9 +36,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
               <Zap size={18} className="text-white" />
             </div>
-            <span className="text-xl font-bold text-surface-900 dark:text-white">
-              Linkly
-            </span>
+            <span className="text-xl font-bold text-surface-900 dark:text-white">Linkly</span>
           </Link>
         </div>
 
@@ -78,9 +68,7 @@ export function Header() {
           {isAuthenticated && user ? (
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-surface-900 dark:text-white">
-                  {user.name}
-                </p>
+                <p className="text-sm font-medium text-surface-900 dark:text-white">{user.name}</p>
                 <p className="text-xs text-surface-500">{user.email}</p>
               </div>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
@@ -97,8 +85,12 @@ export function Header() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link to="/login" className="btn-ghost text-sm">Log in</Link>
-              <Link to="/register" className="btn-primary text-sm">Sign up</Link>
+              <Link to="/login" className="btn-ghost text-sm">
+                Log in
+              </Link>
+              <Link to="/register" className="btn-primary text-sm">
+                Sign up
+              </Link>
             </div>
           )}
         </div>

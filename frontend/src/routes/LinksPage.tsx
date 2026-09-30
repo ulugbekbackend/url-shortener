@@ -69,9 +69,7 @@ export function LinksPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Links</h1>
-          <p className="text-surface-600 dark:text-surface-400">
-            {links?.length || 0} links total
-          </p>
+          <p className="text-surface-600 dark:text-surface-400">{links?.length || 0} links total</p>
         </div>
         <button onClick={() => setShowCreateModal(true)} className="btn-primary">
           <Plus size={18} /> New Link
@@ -118,7 +116,9 @@ export function LinksPage() {
               >
                 <option value="">All tags</option>
                 {allTags.map((tag) => (
-                  <option key={tag} value={tag}>{tag}</option>
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
                 ))}
               </select>
             )}
@@ -128,12 +128,16 @@ export function LinksPage() {
 
       {/* Links table */}
       {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+        <div className="flex justify-center py-12">
+          <Spinner size="lg" />
+        </div>
       ) : sortedLinks.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-lg font-medium text-surface-900 dark:text-white">No links found</p>
           <p className="mt-2 text-surface-600 dark:text-surface-400">
-            {search ? "Try adjusting your search or filters." : "Create your first link to get started."}
+            {search
+              ? "Try adjusting your search or filters."
+              : "Create your first link to get started."}
           </p>
           {!search && (
             <button onClick={() => setShowCreateModal(true)} className="btn-primary mt-4">
@@ -147,21 +151,43 @@ export function LinksPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-surface-200 bg-surface-50 dark:border-surface-700 dark:bg-surface-800/50">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500">Link</th>
-                  <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500 md:table-cell">Original URL</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-500">Clicks</th>
-                  <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500 sm:table-cell">Created</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-500">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500">
+                    Link
+                  </th>
+                  <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500 md:table-cell">
+                    Original URL
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-500">
+                    Clicks
+                  </th>
+                  <th className="hidden px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500 sm:table-cell">
+                    Created
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-surface-500">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-surface-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-200 dark:divide-surface-700">
                 {sortedLinks.map((link) => (
-                  <tr key={link.id} className="hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors">
+                  <tr
+                    key={link.id}
+                    className="hover:bg-surface-50 dark:hover:bg-surface-800/30 transition-colors"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {link.faviconUrl ? (
-                          <img src={link.faviconUrl} alt="" className="h-5 w-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          <img
+                            src={link.faviconUrl}
+                            alt=""
+                            className="h-5 w-5 rounded"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
                         ) : (
                           <div className="flex h-5 w-5 items-center justify-center rounded bg-surface-200 dark:bg-surface-700">
                             <ExternalLink size={10} className="text-surface-400" />
@@ -172,8 +198,14 @@ export function LinksPage() {
                             {link.title || link.code}
                           </p>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-primary-600 dark:text-primary-400">{link.shortUrl}</span>
-                            <CopyButton text={`https://${link.shortUrl}`} label="" className="!text-xs" />
+                            <span className="text-xs text-primary-600 dark:text-primary-400">
+                              {link.shortUrl}
+                            </span>
+                            <CopyButton
+                              text={`https://${link.shortUrl}`}
+                              label=""
+                              className="!text-xs"
+                            />
                           </div>
                         </div>
                       </div>
@@ -198,7 +230,9 @@ export function LinksPage() {
                         {link.isActive ? "Active" : "Disabled"}
                       </Badge>
                       {link.isCustom && (
-                        <Badge variant="info" className="ml-1.5">Custom</Badge>
+                        <Badge variant="info" className="ml-1.5">
+                          Custom
+                        </Badge>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -213,25 +247,36 @@ export function LinksPage() {
                         {openMenu === link.id && (
                           <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-surface-200 bg-white py-1 shadow-lg dark:border-surface-700 dark:bg-surface-800">
                             <button
-                              onClick={() => { navigate(`/links/${link.id}`); setOpenMenu(null); }}
+                              onClick={() => {
+                                navigate(`/links/${link.id}`);
+                                setOpenMenu(null);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
                             >
                               <BarChart3 size={14} /> Analytics
                             </button>
                             <button
-                              onClick={() => { setOpenMenu(null); }}
+                              onClick={() => {
+                                setOpenMenu(null);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
                             >
                               <Edit size={14} /> Edit
                             </button>
                             <button
-                              onClick={() => { setQrLink({ url: link.originalUrl, code: link.code }); setOpenMenu(null); }}
+                              onClick={() => {
+                                setQrLink({ url: link.originalUrl, code: link.code });
+                                setOpenMenu(null);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
                             >
                               <QrCode size={14} /> QR Code
                             </button>
                             <button
-                              onClick={() => { toggleMutation.mutate(link.id); setOpenMenu(null); }}
+                              onClick={() => {
+                                toggleMutation.mutate(link.id);
+                                setOpenMenu(null);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
                             >
                               {link.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
@@ -239,7 +284,10 @@ export function LinksPage() {
                             </button>
                             <hr className="my-1 border-surface-200 dark:border-surface-700" />
                             <button
-                              onClick={() => { deleteMutation.mutate(link.id); setOpenMenu(null); }}
+                              onClick={() => {
+                                deleteMutation.mutate(link.id);
+                                setOpenMenu(null);
+                              }}
                               className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                             >
                               <Trash2 size={14} /> Delete
@@ -257,14 +305,10 @@ export function LinksPage() {
       )}
 
       {/* Create Modal */}
-      {showCreateModal && (
-        <CreateLinkModal onClose={() => setShowCreateModal(false)} />
-      )}
+      {showCreateModal && <CreateLinkModal onClose={() => setShowCreateModal(false)} />}
 
       {/* QR Modal */}
-      {qrLink && (
-        <QRModal url={qrLink.url} code={qrLink.code} onClose={() => setQrLink(null)} />
-      )}
+      {qrLink && <QRModal url={qrLink.url} code={qrLink.code} onClose={() => setQrLink(null)} />}
     </div>
   );
 }
@@ -300,15 +344,26 @@ function CreateLinkModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-bold text-surface-900 dark:text-white">Create New Link</h2>
-          <button onClick={onClose} className="btn-ghost !p-2"><X size={20} /></button>
+          <button onClick={onClose} className="btn-ghost !p-2">
+            <X size={20} />
+          </button>
         </div>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            createMutation.mutate();
+          }}
           className="space-y-4"
         >
           <div>
@@ -341,7 +396,9 @@ function CreateLinkModal({ onClose }: { onClose: () => void }) {
                 pattern="[A-Za-z0-9_-]{3,50}"
               />
             </div>
-            <p className="mt-1 text-xs text-surface-500">3-50 chars, letters, numbers, hyphens, underscores</p>
+            <p className="mt-1 text-xs text-surface-500">
+              3-50 chars, letters, numbers, hyphens, underscores
+            </p>
           </div>
 
           <div>
@@ -363,9 +420,16 @@ function CreateLinkModal({ onClose }: { onClose: () => void }) {
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
               {tags.map((tag) => (
-                <span key={tag} className="badge bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 flex items-center gap-1">
+                <span
+                  key={tag}
+                  className="badge bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 flex items-center gap-1"
+                >
                   {tag}
-                  <button type="button" onClick={() => setTags(tags.filter((t) => t !== tag))} className="hover:text-red-500">
+                  <button
+                    type="button"
+                    onClick={() => setTags(tags.filter((t) => t !== tag))}
+                    className="hover:text-red-500"
+                  >
                     <X size={12} />
                   </button>
                 </span>
@@ -376,16 +440,25 @@ function CreateLinkModal({ onClose }: { onClose: () => void }) {
                 type="text"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag();
+                  }
+                }}
                 placeholder="Add a tag..."
                 className="input-field flex-1"
               />
-              <button type="button" onClick={addTag} className="btn-secondary">Add</button>
+              <button type="button" onClick={addTag} className="btn-secondary">
+                Add
+              </button>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={createMutation.isPending || !url}

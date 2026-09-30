@@ -20,28 +20,31 @@ export function QRModal({ url, code, onClose }: QRModalProps) {
 
     // Simple deterministic pattern based on the code string
     const seed = code.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    
+
     for (let row = 0; row < modules; row++) {
       for (let col = 0; col < modules; col++) {
         // Finder patterns (top-left, top-right, bottom-left)
         const isFinderTL = row < 7 && col < 7;
         const isFinderTR = row < 7 && col >= modules - 7;
         const isFinderBL = row >= modules - 7 && col < 7;
-        
+
         if (isFinderTL || isFinderTR || isFinderBL) {
           // Finder pattern logic
           const localRow = isFinderTL ? row : isFinderBL ? row - (modules - 7) : row;
           const localCol = isFinderTL ? col : isFinderTR ? col - (modules - 7) : col;
-          
+
           if (
-            localRow === 0 || localRow === 6 || localCol === 0 || localCol === 6 ||
+            localRow === 0 ||
+            localRow === 6 ||
+            localCol === 0 ||
+            localCol === 6 ||
             (localRow >= 2 && localRow <= 4 && localCol >= 2 && localCol <= 4)
           ) {
             cells.push({ x: col * cellSize, y: row * cellSize });
           }
         } else {
           // Data modules - pseudo-random based on seed
-          const hash = ((seed * (row + 1) * (col + 1)) + row * 31 + col * 17) % 100;
+          const hash = (seed * (row + 1) * (col + 1) + row * 31 + col * 17) % 100;
           if (hash < 45) {
             cells.push({ x: col * cellSize, y: row * cellSize });
           }
@@ -90,7 +93,10 @@ export function QRModal({ url, code, onClose }: QRModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-surface-800"
         onClick={(e) => e.stopPropagation()}
@@ -99,15 +105,14 @@ export function QRModal({ url, code, onClose }: QRModalProps) {
           <h2 className="flex items-center gap-2 text-lg font-bold text-surface-900 dark:text-white">
             <QrCode size={20} /> QR Code
           </h2>
-          <button onClick={onClose} className="btn-ghost !p-2"><X size={18} /></button>
+          <button onClick={onClose} className="btn-ghost !p-2">
+            <X size={18} />
+          </button>
         </div>
 
         {/* QR Preview */}
         <div className="flex justify-center mb-6">
-          <div
-            className="rounded-xl p-4 shadow-inner"
-            style={{ backgroundColor: bgColor }}
-          >
+          <div className="rounded-xl p-4 shadow-inner" style={{ backgroundColor: bgColor }}>
             <svg
               id="qr-svg"
               width={size}
@@ -191,9 +196,7 @@ export function QRModal({ url, code, onClose }: QRModalProps) {
           </div>
         </div>
 
-        <p className="mt-4 text-center text-xs text-surface-500">
-          https://lnk.ly/{code}
-        </p>
+        <p className="mt-4 text-center text-xs text-surface-500">https://lnk.ly/{code}</p>
       </div>
     </div>
   );

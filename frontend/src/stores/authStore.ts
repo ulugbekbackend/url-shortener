@@ -50,7 +50,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const updated = { ...state.user, name, email };
       localStorage.setItem(
         "linkly-auth",
-        JSON.stringify({ user: updated, token: state.accessToken })
+        JSON.stringify({ user: updated, token: state.accessToken }),
       );
       return { user: updated };
     }),

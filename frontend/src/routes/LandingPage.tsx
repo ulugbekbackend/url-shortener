@@ -39,11 +39,15 @@ export function LandingPage() {
   const [url, setUrl] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const { isAuthenticated } = useAuthStore();
-  
+
   // If user is authenticated, show dashboard link prominently
   void isAuthenticated;
 
-  const { data: result, isLoading, refetch } = useQuery({
+  const {
+    data: result,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["shorten", url],
     queryFn: () => api.shorten.anonymous(url),
     enabled: false,
@@ -80,8 +84,12 @@ export function LandingPage() {
               </Link>
             ) : (
               <>
-                <Link to="/login" className="btn-ghost text-sm hidden sm:inline-flex">Log in</Link>
-                <Link to="/register" className="btn-primary text-sm">Sign up free</Link>
+                <Link to="/login" className="btn-ghost text-sm hidden sm:inline-flex">
+                  Log in
+                </Link>
+                <Link to="/register" className="btn-primary text-sm">
+                  Sign up free
+                </Link>
               </>
             )}
           </div>
@@ -92,7 +100,7 @@ export function LandingPage() {
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-purple-50 dark:from-primary-950/20 dark:via-surface-950 dark:to-purple-950/10" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--color-primary-200)_0%,_transparent_50%)] opacity-30 dark:opacity-10" />
-        
+
         <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8 lg:py-32">
           <motion.div
             variants={containerVariants}
@@ -100,21 +108,30 @@ export function LandingPage() {
             animate="visible"
             className="mx-auto max-w-3xl text-center"
           >
-            <motion.div variants={itemVariants} className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400">
+            <motion.div
+              variants={itemVariants}
+              className="mb-6 inline-flex items-center gap-2 rounded-full bg-primary-100 px-4 py-1.5 text-sm font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
+            >
               <Star size={14} className="fill-current" />
               Trusted by 50,000+ users worldwide
             </motion.div>
-            
-            <motion.h1 variants={itemVariants} className="text-4xl font-extrabold tracking-tight text-surface-900 sm:text-5xl lg:text-6xl dark:text-white">
+
+            <motion.h1
+              variants={itemVariants}
+              className="text-4xl font-extrabold tracking-tight text-surface-900 sm:text-5xl lg:text-6xl dark:text-white"
+            >
               Shorten links.{" "}
               <span className="bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 bg-clip-text text-transparent">
                 Track everything.
               </span>
             </motion.h1>
-            
-            <motion.p variants={itemVariants} className="mt-6 text-lg text-surface-600 dark:text-surface-400 sm:text-xl">
-              Create short, memorable links and get detailed analytics on every click.
-              Track countries, devices, referrers, and more — all in real-time.
+
+            <motion.p
+              variants={itemVariants}
+              className="mt-6 text-lg text-surface-600 dark:text-surface-400 sm:text-xl"
+            >
+              Create short, memorable links and get detailed analytics on every click. Track
+              countries, devices, referrers, and more — all in real-time.
             </motion.p>
 
             {/* URL Input */}
@@ -125,7 +142,10 @@ export function LandingPage() {
                   <input
                     type="url"
                     value={url}
-                    onChange={(e) => { setUrl(e.target.value); setSubmitted(false); }}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setSubmitted(false);
+                    }}
                     placeholder="Paste your long URL here..."
                     className="input-field h-14 !pl-12 !pr-4 !text-base sm:rounded-r-none sm:border-r-0"
                     required
@@ -136,8 +156,12 @@ export function LandingPage() {
                   disabled={isLoading}
                   className="btn-primary h-14 rounded-lg px-8 text-base font-semibold sm:rounded-l-none"
                 >
-                  {isLoading ? <Spinner size="sm" /> : (
-                    <>Shorten <ArrowRight size={18} /></>
+                  {isLoading ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>
+                      Shorten <ArrowRight size={18} />
+                    </>
                   )}
                 </button>
               </div>
@@ -154,7 +178,9 @@ export function LandingPage() {
                 transition={{ duration: 0.3 }}
                 className="mt-6 card mx-auto max-w-lg text-left"
               >
-                <p className="text-sm text-surface-500 dark:text-surface-400">Your shortened URL:</p>
+                <p className="text-sm text-surface-500 dark:text-surface-400">
+                  Your shortened URL:
+                </p>
                 <div className="mt-2 flex items-center justify-between gap-4">
                   <p className="text-lg font-semibold text-primary-600 dark:text-primary-400 truncate">
                     https://{result.shortUrl}
@@ -163,7 +189,10 @@ export function LandingPage() {
                 </div>
                 <p className="mt-3 text-sm text-surface-500 dark:text-surface-400">
                   Anonymous links expire after 7 days.{" "}
-                  <Link to="/register" className="font-medium text-primary-600 hover:underline dark:text-primary-400">
+                  <Link
+                    to="/register"
+                    className="font-medium text-primary-600 hover:underline dark:text-primary-400"
+                  >
                     Sign up free
                   </Link>{" "}
                   for permanent links & full analytics.
@@ -200,17 +229,54 @@ export function LandingPage() {
             className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
           >
             {[
-              { icon: BarChart3, title: "Detailed Analytics", desc: "Track clicks by country, device, browser, referrer, and UTM parameters. See trends over time with interactive charts.", color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
-              { icon: QrCode, title: "QR Code Generator", desc: "Generate custom QR codes for every link. Download as PNG or SVG with custom colors and sizes.", color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
-              { icon: Shield, title: "Password Protection", desc: "Lock sensitive links behind a password. Only authorized visitors can access the destination URL.", color: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" },
-              { icon: Globe, title: "Custom Aliases", desc: "Create memorable branded short links like lnk.ly/your-brand instead of random codes.", color: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" },
-              { icon: Clock, title: "Link Expiration", desc: "Set links to auto-expire after a date or number of clicks. Perfect for time-limited campaigns.", color: "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" },
-              { icon: MousePointerClick, title: "Real-time Clicks", desc: "See clicks as they happen with a live counter that updates every 10 seconds on your analytics page.", color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" },
+              {
+                icon: BarChart3,
+                title: "Detailed Analytics",
+                desc: "Track clicks by country, device, browser, referrer, and UTM parameters. See trends over time with interactive charts.",
+                color: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+              },
+              {
+                icon: QrCode,
+                title: "QR Code Generator",
+                desc: "Generate custom QR codes for every link. Download as PNG or SVG with custom colors and sizes.",
+                color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
+              },
+              {
+                icon: Shield,
+                title: "Password Protection",
+                desc: "Lock sensitive links behind a password. Only authorized visitors can access the destination URL.",
+                color:
+                  "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
+              },
+              {
+                icon: Globe,
+                title: "Custom Aliases",
+                desc: "Create memorable branded short links like lnk.ly/your-brand instead of random codes.",
+                color: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400",
+              },
+              {
+                icon: Clock,
+                title: "Link Expiration",
+                desc: "Set links to auto-expire after a date or number of clicks. Perfect for time-limited campaigns.",
+                color: "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400",
+              },
+              {
+                icon: MousePointerClick,
+                title: "Real-time Clicks",
+                desc: "See clicks as they happen with a live counter that updates every 10 seconds on your analytics page.",
+                color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400",
+              },
             ].map((feature) => {
               const Icon = feature.icon;
               return (
-                <motion.div key={feature.title} variants={itemVariants} className="card group hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                  <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${feature.color} group-hover:scale-110 transition-transform duration-300`}>
+                <motion.div
+                  key={feature.title}
+                  variants={itemVariants}
+                  className="card group hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
+                >
+                  <div
+                    className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${feature.color} group-hover:scale-110 transition-transform duration-300`}
+                  >
                     <Icon size={24} />
                   </div>
                   <h3 className="text-lg font-semibold text-surface-900 dark:text-white">
@@ -250,7 +316,10 @@ export function LandingPage() {
                   viewport={{ once: true }}
                   className="group"
                 >
-                  <Icon size={24} className="mx-auto mb-3 text-primary-500 dark:text-primary-400 group-hover:scale-110 transition-transform" />
+                  <Icon
+                    size={24}
+                    className="mx-auto mb-3 text-primary-500 dark:text-primary-400 group-hover:scale-110 transition-transform"
+                  />
                   <p className="text-3xl font-extrabold text-surface-900 dark:text-white sm:text-4xl">
                     {stat.value}
                   </p>
@@ -273,9 +342,7 @@ export function LandingPage() {
             viewport={{ once: true }}
             className="mx-auto max-w-2xl text-center mb-16"
           >
-            <h2 className="text-3xl font-bold text-surface-900 dark:text-white">
-              How it works
-            </h2>
+            <h2 className="text-3xl font-bold text-surface-900 dark:text-white">How it works</h2>
             <p className="mt-4 text-lg text-surface-600 dark:text-surface-400">
               Three simple steps to start tracking your links
             </p>
@@ -283,9 +350,21 @@ export function LandingPage() {
 
           <div className="grid gap-8 md:grid-cols-3">
             {[
-              { step: "1", title: "Paste your URL", desc: "Enter any long URL and optionally customize the short code." },
-              { step: "2", title: "Share your link", desc: "Copy your shortened URL and share it anywhere — social media, emails, print." },
-              { step: "3", title: "Track analytics", desc: "Monitor clicks in real-time. See who's clicking, from where, and when." },
+              {
+                step: "1",
+                title: "Paste your URL",
+                desc: "Enter any long URL and optionally customize the short code.",
+              },
+              {
+                step: "2",
+                title: "Share your link",
+                desc: "Copy your shortened URL and share it anywhere — social media, emails, print.",
+              },
+              {
+                step: "3",
+                title: "Track analytics",
+                desc: "Monitor clicks in real-time. See who's clicking, from where, and when.",
+              },
             ].map((item, i) => (
               <motion.div
                 key={item.step}
@@ -298,7 +377,9 @@ export function LandingPage() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-xl font-bold text-white shadow-lg shadow-primary-600/20">
                   {item.step}
                 </div>
-                <h3 className="text-lg font-semibold text-surface-900 dark:text-white">{item.title}</h3>
+                <h3 className="text-lg font-semibold text-surface-900 dark:text-white">
+                  {item.title}
+                </h3>
                 <p className="mt-2 text-surface-600 dark:text-surface-400">{item.desc}</p>
               </motion.div>
             ))}
@@ -315,17 +396,21 @@ export function LandingPage() {
             viewport={{ once: true }}
             className="mx-auto max-w-2xl rounded-2xl bg-gradient-to-br from-primary-600 to-purple-700 p-10 text-center shadow-xl"
           >
-            <h2 className="text-3xl font-bold text-white">
-              Ready to take control of your links?
-            </h2>
+            <h2 className="text-3xl font-bold text-white">Ready to take control of your links?</h2>
             <p className="mt-4 text-lg text-primary-100">
               Join thousands of marketers, developers, and creators who trust Linkly.
             </p>
             <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-lg bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-sm transition-all hover:bg-primary-50">
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-sm transition-all hover:bg-primary-50"
+              >
                 Get started free <ArrowRight size={18} />
               </Link>
-              <Link to="/links" className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-8 py-3 text-base font-semibold text-white transition-all hover:bg-white/10">
+              <Link
+                to="/links"
+                className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-8 py-3 text-base font-semibold text-white transition-all hover:bg-white/10"
+              >
                 View demo links
               </Link>
             </div>
@@ -344,9 +429,24 @@ export function LandingPage() {
               <span className="text-sm font-semibold text-surface-900 dark:text-white">Linkly</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-surface-500 dark:text-surface-400">
-              <Link to="/dashboard" className="hover:text-surface-900 dark:hover:text-white transition-colors">Dashboard</Link>
-              <Link to="/links" className="hover:text-surface-900 dark:hover:text-white transition-colors">Links</Link>
-              <Link to="/settings" className="hover:text-surface-900 dark:hover:text-white transition-colors">Settings</Link>
+              <Link
+                to="/dashboard"
+                className="hover:text-surface-900 dark:hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
+                to="/links"
+                className="hover:text-surface-900 dark:hover:text-white transition-colors"
+              >
+                Links
+              </Link>
+              <Link
+                to="/settings"
+                className="hover:text-surface-900 dark:hover:text-white transition-colors"
+              >
+                Settings
+              </Link>
             </div>
             <p className="text-sm text-surface-500 dark:text-surface-400">
               © 2026 Linkly. Open source.
