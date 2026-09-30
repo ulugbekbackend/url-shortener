@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useAuthStore } from "../../stores/authStore";
@@ -16,7 +16,6 @@ export function Header() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const { sidebarOpen, toggleSidebar } = useUIStore();
   const location = useLocation();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const handleLogout = async () => {
@@ -25,9 +24,8 @@ export function Header() {
     } catch {
       // Sign out locally even if the server can't be reached
     }
-    logout();
+    logout({ redirectTo: "/" });
     queryClient.clear();
-    navigate("/");
   };
 
   return (

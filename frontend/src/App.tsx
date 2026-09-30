@@ -40,10 +40,13 @@ function PageLoader() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const status = useAuthStore((s) => s.status);
+  const guestRedirect = useAuthStore((s) => s.guestRedirect);
   const location = useLocation();
   if (status === "loading") return <PageLoader />;
   if (status === "guest") {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // Only a lost session should bring the user back here after signing in again
+    const state = guestRedirect === "/login" ? { from: location } : undefined;
+    return <Navigate to={guestRedirect} replace state={state} />;
   }
   return <>{children}</>;
 }

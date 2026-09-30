@@ -121,6 +121,24 @@ describe("protected routes", () => {
     mockApi({ "GET /links": linkPage(), "GET /tags": [] });
   });
 
+  it("signing out lands on the home page", async () => {
+    mockApi({ "GET /links": linkPage(), "GET /tags": [], "POST /auth/logout": {} });
+    renderAt("/links");
+    await userEvent.click(await screen.findByRole("button", { name: /logout/i }));
+    expect(await screen.findByPlaceholderText(/paste your long url/i)).toBeInTheDocument();
+    expect(useAuthStore.getState().status).toBe("guest");
+  });
+
+  it("an expired session sends the user to sign in", async () => {
+    mockApi({
+      "GET /links": apiError(401, "INVALID_TOKEN", "Invalid or expired token"),
+      "GET /tags": [],
+      "POST /auth/refresh": apiError(401, "INVALID_REFRESH_TOKEN", "Refresh token not found"),
+    });
+    renderAt("/links");
+    expect(await screen.findByText(/sign in to your account/i)).toBeInTheDocument();
+  });
+
   it("lists the user's links from the API", async () => {
     renderAt("/links");
     expect(await screen.findByText("Example page")).toBeInTheDocument();

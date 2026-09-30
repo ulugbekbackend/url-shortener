@@ -10,11 +10,12 @@ interface AuthState {
   user: User | null;
   /** Kept in memory only; the httpOnly refresh cookie restores it after a reload. */
   accessToken: string | null;
+  /** Where protected pages send a guest: /login after a lost session, / after signing out */
+  guestRedirect: string;
   login: (user: User, token: string) => void;
-  logout: () => void;
+  logout: (options?: { redirectTo?: string }) => void;
   setToken: (token: string) => void;
   setUser: (user: User) => void;
-  updateProfile: (name: string, email: string) => void;
 }
 
 // Older builds kept the session (and mock users) in localStorage; drop the leftovers
@@ -30,11 +31,23 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
   accessToken: null,
+  guestRedirect: "/login",
   login: (user, token) =>
-    set({ status: "authenticated", isAuthenticated: true, user, accessToken: token }),
-  logout: () => set({ status: "guest", isAuthenticated: false, user: null, accessToken: null }),
+    set({
+      status: "authenticated",
+      isAuthenticated: true,
+      user,
+      accessToken: token,
+      guestRedirect: "/login",
+    }),
+  logout: (options) =>
+    set({
+      status: "guest",
+      isAuthenticated: false,
+      user: null,
+      accessToken: null,
+      guestRedirect: options?.redirectTo ?? "/login",
+    }),
   setToken: (token) => set({ accessToken: token }),
   setUser: (user) => set({ user }),
-  updateProfile: (name, email) =>
-    set((state) => (state.user ? { user: { ...state.user, name, email } } : state)),
 }));

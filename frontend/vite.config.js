@@ -24,6 +24,8 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       setupFiles: "./src/test/setup.ts",
+      // Must exceed the 5s findBy timeout set in setup.ts (lazy routes load slowly on a cold run)
+      testTimeout: 15000,
     },
   };
 });

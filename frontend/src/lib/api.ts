@@ -17,9 +17,6 @@ import type {
   User,
 } from "../types";
 import { ApiError, request } from "./http";
-import { generateApiKeys } from "./mockData";
-
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** from_date for "the last N days"; the server defaults to_date to now */
 function since(days?: number) {
@@ -46,6 +43,16 @@ export const api = {
       }),
     logout: () => request<void>("/auth/logout", { method: "POST", auth: false }),
     me: () => request<User>("/auth/me"),
+    updateProfile: (changes: { name?: string; email?: string }) =>
+      request<User>("/auth/me", { method: "PATCH", body: changes }),
+    /** Signs out every other session; returns fresh tokens for this one */
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ accessToken: string; user: User }>("/auth/change-password", {
+        method: "POST",
+        body: { currentPassword, newPassword },
+      }),
+    deleteAccount: (password: string) =>
+      request<void>("/auth/me", { method: "DELETE", body: { password } }),
   },
   links: {
     list: (params: LinkListParams = {}) => request<Page<Link>>("/links", { query: { ...params } }),
@@ -85,29 +92,11 @@ export const api = {
       }),
   },
   apiKeys: {
-    list: async (): Promise<ApiKey[]> => {
-      await delay(300);
-      return generateApiKeys();
-    },
-    create: async (name: string): Promise<{ key: ApiKey; fullKey: string }> => {
-      await delay(500);
-      const fullKey = `lnk_${Math.random().toString(36).substring(2, 10)}_${Date.now().toString(36)}`;
-      return {
-        key: {
-          id: `key_${Date.now()}`,
-          name,
-          prefix: fullKey.substring(0, 12) + "_",
-          lastUsedAt: null,
-          createdAt: new Date().toISOString(),
-          revokedAt: null,
-        },
-        fullKey,
-      };
-    },
-    revoke: async (id: string): Promise<void> => {
-      await delay(300);
-      void id;
-    },
+    list: () => request<ApiKey[]>("/api-keys"),
+    /** The full key is only ever returned here, once */
+    create: (name: string) =>
+      request<{ key: ApiKey; fullKey: string }>("/api-keys", { method: "POST", body: { name } }),
+    revoke: (id: string) => request<void>(`/api-keys/${id}`, { method: "DELETE" }),
   },
   shorten: {
     anonymous: (url: string) =>
