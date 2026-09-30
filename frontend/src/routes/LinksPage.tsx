@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { SHORT_HOST } from "../lib/config";
 import { useDebouncedValue } from "../lib/hooks";
 import { errorMessage } from "../lib/http";
-import { displayUrl, formatDate, formatNumber } from "../lib/utils";
+import { displayUrl, downloadBlob, formatDate, formatNumber } from "../lib/utils";
 import { useToastStore } from "../stores/toastStore";
 import type { Link } from "../types";
 import { Badge } from "../components/ui/Badge";
@@ -27,6 +27,8 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Upload,
 } from "lucide-react";
 
 type StatusFilter = "all" | "active" | "disabled";
@@ -75,6 +77,18 @@ export function LinksPage() {
 
   const onMutationError = (err: unknown) => addToast(errorMessage(err), "error");
 
+  const [exporting, setExporting] = useState(false);
+  const exportLinks = async () => {
+    setExporting(true);
+    try {
+      downloadBlob(await api.links.exportCsv(), "links.csv");
+    } catch (err) {
+      onMutationError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const deleteMutation = useMutation({
     mutationFn: api.links.delete,
     onSuccess: () => {
@@ -114,9 +128,17 @@ export function LinksPage() {
           <h1 className="text-2xl font-bold text-surface-900 dark:text-white">Links</h1>
           <p className="text-surface-600 dark:text-surface-400">{total} links total</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="btn-primary">
-          <Plus size={18} /> New Link
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportLinks} disabled={exporting} className="btn-secondary">
+            {exporting ? <Spinner size="sm" /> : <Download size={16} />} Export CSV
+          </button>
+          <RouterLink to="/links/bulk" className="btn-secondary">
+            <Upload size={16} /> Bulk upload
+          </RouterLink>
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary">
+            <Plus size={18} /> New Link
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

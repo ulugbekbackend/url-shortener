@@ -69,6 +69,21 @@ export interface LinkChanges {
   isPermanent?: boolean;
 }
 
+export interface BulkRowResult {
+  row: number;
+  url: string;
+  status: "success" | "error";
+  code?: string | null;
+  shortUrl?: string | null;
+  error?: string | null;
+}
+
+export interface BulkImportResult {
+  created: number;
+  failed: number;
+  results: BulkRowResult[];
+}
+
 export interface QrOptions {
   format: "png" | "svg";
   /** Pixels per QR module */

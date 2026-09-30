@@ -1,6 +1,7 @@
 import type {
   ApiKey,
   BreakdownItem,
+  BulkImportResult,
   Dimension,
   Interval,
   Link,
@@ -72,6 +73,13 @@ export const api = {
     toggle: (link: Link) =>
       request<Link>(`/links/${link.id}`, { method: "PATCH", body: { isActive: !link.isActive } }),
     delete: (id: string) => request<void>(`/links/${id}`, { method: "DELETE" }),
+    /** CSV with url, title, tags, custom_code columns; bad rows are reported, not fatal */
+    bulk: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return request<BulkImportResult>("/links/bulk", { method: "POST", form });
+    },
+    exportCsv: () => request<Blob>("/links/export", { responseType: "blob" }),
     qr: (id: string, options: QrOptions) =>
       request<Blob>(`/links/${id}/qr`, { query: { ...options }, responseType: "blob" }),
   },
