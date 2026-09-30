@@ -3,6 +3,7 @@
 Link data is cached in Redis; the click counter lives in Redis too, so `max_clicks`
 is enforced atomically without touching the database on every hit.
 """
+
 import html
 import re
 from datetime import UTC, datetime
@@ -52,7 +53,9 @@ async def _load_link(code: str) -> dict[str, Any]:
         link = await LinkService(session).get_link_by_code(code)
 
     if not link:
-        await redis.setex(link_cache_key(code), settings.NEGATIVE_CACHE_TTL, '{"status": "negative"}')
+        await redis.setex(
+            link_cache_key(code), settings.NEGATIVE_CACHE_TTL, '{"status": "negative"}'
+        )
         raise _not_found()
 
     data = {

@@ -1,4 +1,5 @@
 """Links API endpoints."""
+
 import io
 from typing import Literal
 from uuid import UUID
@@ -117,7 +118,7 @@ async def list_links(
         page=page,
         page_size=page_size,
     )
-    
+
     return LinkListResponse(
         items=[link_to_response(link) for link in links],
         total=total,
@@ -207,6 +208,7 @@ async def delete_link(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
         )
+
 
 QR_COLOR = r"^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|transparent)$"
 QR_MEDIA_TYPES = {"png": "image/png", "svg": "image/svg+xml"}

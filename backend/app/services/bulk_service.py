@@ -1,4 +1,5 @@
 """CSV import and export of links."""
+
 import csv
 import io
 from uuid import UUID
@@ -13,8 +14,15 @@ from app.services.link_service import LinkService, short_url
 MAX_ROWS = 500
 MAX_FILE_BYTES = 1024 * 1024
 EXPORT_COLUMNS = [
-    "code", "short_url", "original_url", "title", "tags",
-    "total_clicks", "is_active", "expires_at", "created_at",
+    "code",
+    "short_url",
+    "original_url",
+    "title",
+    "tags",
+    "total_clicks",
+    "is_active",
+    "expires_at",
+    "created_at",
 ]
 # Cells starting with these are run as formulas by spreadsheet apps
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -49,7 +57,9 @@ def parse_csv(raw: bytes) -> list[CsvRow]:
     return rows
 
 
-async def import_links(service: LinkService, user_id: UUID, rows: list[CsvRow]) -> list[BulkRowResult]:
+async def import_links(
+    service: LinkService, user_id: UUID, rows: list[CsvRow]
+) -> list[BulkRowResult]:
     """Create a link per row; a bad row is reported and skipped, never aborting the batch."""
     results = []
     for line, cells in rows:
@@ -78,7 +88,11 @@ async def import_links(service: LinkService, user_id: UUID, rows: list[CsvRow]) 
         else:
             results.append(
                 BulkRowResult(
-                    row=line, url=url, status="success", code=link.code, short_url=short_url(link.code)
+                    row=line,
+                    url=url,
+                    status="success",
+                    code=link.code,
+                    short_url=short_url(link.code),
                 )
             )
     return results

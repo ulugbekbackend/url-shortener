@@ -1,4 +1,5 @@
 """Tags endpoints."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

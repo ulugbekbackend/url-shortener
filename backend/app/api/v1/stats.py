@@ -4,6 +4,7 @@
 Bots are left out of unique visitors, and out of timeseries and breakdowns unless
 `include_bots=true`.
 """
+
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
@@ -234,8 +235,12 @@ async def get_breakdown(
 ):
     """Top values of a dimension across all of the user's links."""
     return await _breakdown(
-        db, _user_scope(current_user), dimension, _period_filters(from_date, to_date),
-        limit, include_bots,
+        db,
+        _user_scope(current_user),
+        dimension,
+        _period_filters(from_date, to_date),
+        limit,
+        include_bots,
     )
 
 

@@ -1,4 +1,5 @@
 """Validation of target URLs before they are shortened."""
+
 import ipaddress
 import re
 from urllib.parse import urlsplit

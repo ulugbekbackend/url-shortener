@@ -4,6 +4,7 @@ Every /api request is counted against one bucket per hour: the user (valid JWT),
 (valid key) or otherwise the client IP. Login and link unlock additionally have tight
 per-IP limits against password guessing. If Redis is unavailable requests are let through.
 """
+
 import logging
 import time
 import uuid
@@ -52,7 +53,10 @@ class RateLimitResult:
 
     @property
     def headers(self) -> dict[str, str]:
-        headers = {"X-RateLimit-Limit": str(self.limit), "X-RateLimit-Remaining": str(self.remaining)}
+        headers = {
+            "X-RateLimit-Limit": str(self.limit),
+            "X-RateLimit-Remaining": str(self.remaining),
+        }
         if not self.allowed:
             headers["Retry-After"] = str(self.retry_after)
         return headers

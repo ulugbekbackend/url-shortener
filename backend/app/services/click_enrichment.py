@@ -1,4 +1,5 @@
 """Turn raw click events from the Redis stream into `clicks` rows."""
+
 import hashlib
 import hmac
 import logging

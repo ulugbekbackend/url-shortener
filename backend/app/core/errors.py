@@ -2,6 +2,7 @@
 
 Every error leaves the API as {"error": {"code": ..., "message": ..., "details"?: ...}}.
 """
+
 from http import HTTPStatus
 from typing import Any
 

@@ -1,4 +1,5 @@
 """API Keys endpoints."""
+
 from datetime import UTC
 from uuid import UUID
 
@@ -36,7 +37,7 @@ async def create_api_key(
 ):
     """Create a new API key (full key shown only once)."""
     full_key, prefix, key_hash = generate_api_key()
-    
+
     api_key = ApiKey(
         user_id=current_user.id,
         name=data.name,
@@ -46,7 +47,7 @@ async def create_api_key(
     db.add(api_key)
     await db.commit()
     await db.refresh(api_key)
-    
+
     return ApiKeyCreatedResponse(
         key=ApiKeyResponse.model_validate(api_key),
         full_key=full_key,
@@ -69,13 +70,14 @@ async def revoke_api_key(
         )
     )
     key = result.scalar_one_or_none()
-    
+
     if not key:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "API_KEY_NOT_FOUND", "message": "API key not found"},
         )
-    
+
     from datetime import datetime
+
     key.revoked_at = datetime.now(UTC)
     await db.commit()

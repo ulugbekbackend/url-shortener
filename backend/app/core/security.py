@@ -1,4 +1,5 @@
 """Security utilities - JWT tokens and password hashing."""
+
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -33,7 +34,7 @@ def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = 
         expire = datetime.now(UTC) + expires_delta
     else:
         expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt

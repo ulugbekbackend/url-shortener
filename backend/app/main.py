@@ -1,4 +1,5 @@
 """Main FastAPI application."""
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -70,13 +71,13 @@ async def health_ready():
         await redis.ping()
     except Exception:
         raise HTTPException(status_code=503, detail="Redis not ready") from None
-    
+
     try:
         async with engine.connect() as conn:
             await conn.execute(select(1))
     except Exception:
         raise HTTPException(status_code=503, detail="Database not ready") from None
-    
+
     return {"status": "ok"}
 
 

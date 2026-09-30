@@ -6,6 +6,7 @@ Events are read through a consumer group, so several workers can share the load 
 events left unacknowledged by a crashed worker are claimed by another one. Delivery is
 at-least-once; the unique `clicks.stream_id` makes storing a redelivered event a no-op.
 """
+
 import asyncio
 import contextlib
 import logging
@@ -173,7 +174,9 @@ async def run(stop: asyncio.Event) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     async def _main() -> None:
         stop = asyncio.Event()

@@ -1,4 +1,5 @@
 """Pydantic schemas for request/response validation."""
+
 import re
 from datetime import datetime
 from typing import Literal
@@ -25,7 +26,7 @@ class UserResponse(BaseModel):
     name: str
     plan: str
     created_at: datetime
-    
+
     model_config = {"from_attributes": True}
 
 
@@ -76,14 +77,14 @@ class LinkCreate(BaseModel):
     max_clicks: int | None = Field(None, gt=0)
     password: str | None = Field(None, min_length=4, max_length=100)
     is_permanent: bool = False
-    
+
     @field_validator("url")
     @classmethod
     def validate_url(cls, v: str) -> str:
         if not v.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
         return v
-    
+
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, v: list[str] | None) -> list[str] | None:
@@ -93,13 +94,15 @@ class LinkCreate(BaseModel):
     @classmethod
     def validate_custom_code(cls, v: str | None) -> str | None:
         if v is not None and not re.match(r"^[A-Za-z0-9_-]+$", v):
-            raise ValueError("Custom code must contain only letters, numbers, hyphens, and underscores")
+            raise ValueError(
+                "Custom code must contain only letters, numbers, hyphens, and underscores"
+            )
         return v
 
 
 class LinkAnonymous(BaseModel):
     url: str = Field(max_length=2048)
-    
+
     @field_validator("url")
     @classmethod
     def validate_url(cls, v: str) -> str:
@@ -139,7 +142,7 @@ class LinkResponse(BaseModel):
     has_password: bool
     created_at: datetime
     updated_at: datetime
-    
+
     model_config = {"from_attributes": True}
 
 
@@ -204,7 +207,7 @@ class ApiKeyResponse(BaseModel):
     last_used_at: datetime | None
     created_at: datetime
     revoked_at: datetime | None
-    
+
     model_config = {"from_attributes": True}
 
 
@@ -223,7 +226,7 @@ class TagResponse(BaseModel):
     name: str
     created_at: datetime
     link_count: int = 0
-    
+
     model_config = {"from_attributes": True}
 
 

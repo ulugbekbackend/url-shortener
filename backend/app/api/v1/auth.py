@@ -1,4 +1,5 @@
 """Auth API endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,10 +78,10 @@ async def login(
         access_token, refresh_token, user = await service.login(
             data.email, data.password, user_agent, ip
         )
-        
+
         # Set refresh token cookie
         _set_refresh_cookie(response, refresh_token)
-        
+
         return TokenResponse(access_token=access_token, user=UserResponse.model_validate(user))
     except ValueError as e:
         raise HTTPException(
@@ -102,16 +103,16 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "NO_REFRESH_TOKEN", "message": "Refresh token not found"},
         )
-    
+
     service = AuthService(db)
     try:
         user_agent = request.headers.get("user-agent")
         ip = request.client.host if request.client else None
         access_token, new_refresh_token = await service.refresh(refresh_token, user_agent, ip)
-        
+
         # Set new refresh token cookie
         _set_refresh_cookie(response, new_refresh_token)
-        
+
         return {"access_token": access_token, "token_type": "bearer"}
     except ValueError as e:
         raise HTTPException(
@@ -131,7 +132,7 @@ async def logout(
     if refresh_token:
         service = AuthService(db)
         await service.logout(refresh_token)
-    
+
     _clear_refresh_cookie(response)
     return {"message": "Logged out successfully"}
 
