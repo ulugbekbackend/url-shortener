@@ -1,0 +1,17 @@
+# Local environment and secrets never go into the image
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+
+# Caches and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# GeoIP database is mounted, not baked in
+data/

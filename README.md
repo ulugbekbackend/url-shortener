@@ -107,18 +107,23 @@ API_PROXY_TARGET=http://localhost:8000
 
 ### Using Docker (Recommended)
 ```bash
-# Copy example environment files
-cp .env.example .env
-# Update .env with your values
+# Backend settings and secrets; set SECRET_KEY, e.g.
+#   python -c "import secrets; print(secrets.token_hex(32))"
+cp backend/.env.example backend/.env
 
-# Build and start all services
-docker-compose up --build
+# Build and start PostgreSQL, Redis, backend, click worker and frontend
+docker compose up --build
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
+# Frontend:    http://localhost:3000
+# Backend API: http://localhost:8000  (docs at /docs)
 ```
+The backend applies database migrations on start; the worker waits until the backend is
+healthy. PostgreSQL is published on port 5433 so it doesn't clash with a local install.
+
+### Behind a reverse proxy
+Rate limiting and click analytics use the client IP. Behind nginx or a load balancer, let
+uvicorn trust the proxy's `X-Forwarded-For` header by setting `FORWARDED_ALLOW_IPS` to the
+proxy's address (default `127.0.0.1`). Also serve over https and keep `COOKIE_SECURE=true`.
 
 ### Running Locally
 
