@@ -1,23 +1,27 @@
 """Links API endpoints."""
+
 import io
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 import segno
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user_or_api_key
 from app.core.database import get_db
-from app.api.deps import get_current_user_optional, get_current_user_or_api_key
+from app.models.models import Link, User
 from app.schemas.schemas import (
-    BulkImportResponse, LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
+    BulkImportResponse,
+    LinkAnonymous,
+    LinkCreate,
+    LinkListResponse,
+    LinkResponse,
+    LinkUpdate,
 )
 from app.services.bulk_service import MAX_FILE_BYTES, export_csv, import_links, parse_csv
 from app.services.link_service import LinkService, short_url
-from app.models.models import User, Link
-
 
 router = APIRouter(prefix="/links", tags=["links"])
 
@@ -49,7 +53,7 @@ async def create_link(
     data: LinkCreate,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Create a new link (authenticated)."""
     service = LinkService(db)
     try:
@@ -69,14 +73,14 @@ async def create_link(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_INPUT", "message": str(e)},
-        )
+        ) from e
 
 
 @router.post("/anonymous", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
 async def create_link_anonymous(
     data: LinkAnonymous,
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Create a new link anonymously (rate limited)."""
     service = LinkService(db)
     try:
@@ -89,20 +93,20 @@ async def create_link_anonymous(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_INPUT", "message": str(e)},
-        )
+        ) from e
 
 
 @router.get("", response_model=LinkListResponse)
 async def list_links(
-    search: Optional[str] = Query(None),
-    tag: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    search: str | None = Query(None),
+    tag: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     sort: str = Query("created"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkListResponse:
     """List user's links with filters."""
     service = LinkService(db)
     links, total = await service.list_links(
@@ -114,7 +118,7 @@ async def list_links(
         page=page,
         page_size=page_size,
     )
-    
+
     return LinkListResponse(
         items=[link_to_response(link) for link in links],
         total=total,
@@ -128,7 +132,7 @@ async def bulk_create_links(
     file: UploadFile = File(..., description="CSV with columns url, title, tags, custom_code"),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> BulkImportResponse:
     """Create up to 500 links from a CSV file; invalid rows are reported, not fatal."""
     rows = parse_csv(await file.read(MAX_FILE_BYTES + 1))
     results = await import_links(LinkService(db), current_user.id, rows)
@@ -140,7 +144,7 @@ async def bulk_create_links(
 async def export_links(
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> Response:
     """Download all of the user's links as CSV."""
     links = await LinkService(db).all_links(current_user.id)
     return Response(
@@ -156,7 +160,7 @@ async def get_link(
     link_id: UUID,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Get a specific link."""
     service = LinkService(db)
     link = await service.get_link_by_id(link_id, current_user.id)
@@ -174,7 +178,7 @@ async def update_link(
     data: LinkUpdate,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> LinkResponse:
     """Update a link."""
     service = LinkService(db)
     link = await service.update_link(
@@ -195,7 +199,7 @@ async def delete_link(
     link_id: UUID,
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> None:
     """Delete a link."""
     service = LinkService(db)
     deleted = await service.delete_link(link_id, current_user.id)
@@ -204,6 +208,7 @@ async def delete_link(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "LINK_NOT_FOUND", "message": "Link not found"},
         )
+
 
 QR_COLOR = r"^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|transparent)$"
 QR_MEDIA_TYPES = {"png": "image/png", "svg": "image/svg+xml"}
@@ -223,7 +228,7 @@ async def get_link_qr(
     light: str = Query("#ffffff", pattern=QR_COLOR),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> Response:
     """QR code of the link's short URL as PNG or SVG."""
     link = await LinkService(db).get_link_by_id(link_id, current_user.id)
     if not link:

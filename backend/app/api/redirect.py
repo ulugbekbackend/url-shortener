@@ -3,9 +3,10 @@
 Link data is cached in Redis; the click counter lives in Redis too, so `max_clicks`
 is enforced atomically without touching the database on every hit.
 """
+
 import html
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import orjson
@@ -24,7 +25,6 @@ from app.services.link_service import (
     click_counter_key,
     link_cache_key,
 )
-
 
 router = APIRouter(tags=["redirect"])
 
@@ -53,7 +53,9 @@ async def _load_link(code: str) -> dict[str, Any]:
         link = await LinkService(session).get_link_by_code(code)
 
     if not link:
-        await redis.setex(link_cache_key(code), settings.NEGATIVE_CACHE_TTL, '{"status": "negative"}')
+        await redis.set(
+            link_cache_key(code), '{"status": "negative"}', ex=settings.NEGATIVE_CACHE_TTL
+        )
         raise _not_found()
 
     data = {
@@ -65,7 +67,7 @@ async def _load_link(code: str) -> dict[str, Any]:
         "max_clicks": link.max_clicks,
         "password_hash": link.password_hash,
     }
-    await redis.setex(link_cache_key(code), settings.LINK_CACHE_TTL, orjson.dumps(data))
+    await redis.set(link_cache_key(code), orjson.dumps(data), ex=settings.LINK_CACHE_TTL)
     # Seed the live counter from the DB total; NX keeps a counter that is already ahead
     await redis.set(click_counter_key(link.id), link.total_clicks, nx=True)
     return data
@@ -74,7 +76,7 @@ async def _load_link(code: str) -> dict[str, Any]:
 def _ensure_available(data: dict[str, Any]) -> None:
     if not data["is_active"]:
         raise AppError(410, "LINK_DISABLED", "Link is disabled")
-    if data["expires_at"] and datetime.fromisoformat(data["expires_at"]) < datetime.now(timezone.utc):
+    if data["expires_at"] and datetime.fromisoformat(data["expires_at"]) < datetime.now(UTC):
         raise AppError(410, "LINK_EXPIRED", "Link has expired")
 
 
@@ -92,7 +94,7 @@ async def _register_click(request: Request, code: str, data: dict[str, Any]) -> 
         {
             "code": code,
             "link_id": data["link_id"],
-            "timestamp": str(datetime.now(timezone.utc).timestamp()),
+            "timestamp": str(datetime.now(UTC).timestamp()),
             "ip": request.client.host if request.client else "",
             "user_agent": request.headers.get("user-agent", ""),
             "referer": request.headers.get("referer", ""),

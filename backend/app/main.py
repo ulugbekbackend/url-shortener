@@ -1,19 +1,19 @@
 """Main FastAPI application."""
+
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 from sqlalchemy import select
 
+from app.api import redirect
+from app.api.v1 import api_keys, auth, links, stats, tags
 from app.core.config import settings
 from app.core.database import engine
 from app.core.errors import register_error_handlers
 from app.core.rate_limit import rate_limit_middleware
-from app.core.redis import get_redis, close_redis
-from app.api import redirect
-from app.api.v1 import auth, links, stats, api_keys, tags
+from app.core.redis import close_redis, get_redis
 
 
 @asynccontextmanager
@@ -30,7 +30,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
 
@@ -57,26 +56,26 @@ app.include_router(tags.router, prefix="/api/v1")
 
 
 @app.get("/health/live")
-async def health_live():
+async def health_live() -> dict[str, str]:
     """Liveness check."""
     return {"status": "ok"}
 
 
 @app.get("/health/ready")
-async def health_ready():
+async def health_ready() -> dict[str, str]:
     """Readiness check - verify DB and Redis."""
     try:
         redis = await get_redis()
         await redis.ping()
     except Exception:
-        raise HTTPException(status_code=503, detail="Redis not ready")
-    
+        raise HTTPException(status_code=503, detail="Redis not ready") from None
+
     try:
         async with engine.connect() as conn:
             await conn.execute(select(1))
     except Exception:
-        raise HTTPException(status_code=503, detail="Database not ready")
-    
+        raise HTTPException(status_code=503, detail="Database not ready") from None
+
     return {"status": "ok"}
 
 

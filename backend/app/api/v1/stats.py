@@ -4,8 +4,9 @@
 Bots are left out of unique visitors, and out of timeseries and breakdowns unless
 `include_bots=true`.
 """
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Optional
+
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -18,7 +19,6 @@ from app.core.errors import AppError
 from app.models.models import Click, Link, User
 from app.schemas.schemas import BreakdownItem, OverviewStats, StatsSummary, TimeSeriesPoint
 from app.services.link_service import LinkService
-
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -39,16 +39,16 @@ DIMENSION_COLUMNS = {
 }
 
 
-def _utc(value: Optional[datetime]) -> Optional[datetime]:
+def _utc(value: datetime | None) -> datetime | None:
     """Treat naive query datetimes as UTC."""
     if value is not None and value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 
-def _range(from_date: Optional[datetime], to_date: Optional[datetime]) -> tuple[datetime, datetime]:
+def _range(from_date: datetime | None, to_date: datetime | None) -> tuple[datetime, datetime]:
     """Resolve an optional range to concrete bounds, defaulting to the last 30 days."""
-    end = _utc(to_date) or datetime.now(timezone.utc)
+    end = _utc(to_date) or datetime.now(UTC)
     start = _utc(from_date) or end - DEFAULT_RANGE
     if start > end:
         raise AppError(400, "INVALID_RANGE", "from_date must be before to_date")
@@ -56,7 +56,7 @@ def _range(from_date: Optional[datetime], to_date: Optional[datetime]) -> tuple[
 
 
 def _period_filters(
-    from_date: Optional[datetime], to_date: Optional[datetime]
+    from_date: datetime | None, to_date: datetime | None
 ) -> list[ColumnElement[bool]]:
     filters = []
     if from_date:
@@ -79,7 +79,7 @@ async def _link_scope(db: AsyncSession, link_id: UUID, user: User) -> list[Colum
 
 def _truncate(moment: datetime, interval: Interval) -> datetime:
     """Python twin of Postgres date_trunc in UTC (weeks start on Monday)."""
-    moment = moment.astimezone(timezone.utc)
+    moment = moment.astimezone(UTC)
     if interval == "hour":
         return moment.replace(minute=0, second=0, microsecond=0)
     day = moment.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -98,7 +98,7 @@ async def _summary(db: AsyncSession, scope: list[ColumnElement[bool]]) -> StatsS
         )
     ).one()
     total, unique, bots, first_click = row
-    days = max(1, (datetime.now(timezone.utc) - first_click).days) if first_click else 1
+    days = max(1, (datetime.now(UTC) - first_click).days) if first_click else 1
     return StatsSummary(
         total_clicks=total,
         unique_visitors=unique,
@@ -174,11 +174,11 @@ async def _breakdown(
 
 @router.get("/overview", response_model=OverviewStats)
 async def get_overview(
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> OverviewStats:
     """Account-wide totals; with a range, click metrics cover only that range."""
     scope = _user_scope(current_user)
     period = _period_filters(from_date, to_date)
@@ -194,7 +194,7 @@ async def get_overview(
                 Link.user_id == current_user.id
             )
         )
-    today_start = _truncate(datetime.now(timezone.utc), "day")
+    today_start = _truncate(datetime.now(UTC), "day")
     clicks_today = await db.scalar(
         select(func.count()).where(*scope, Click.clicked_at >= today_start)
     )
@@ -211,13 +211,13 @@ async def get_overview(
 
 @router.get("/timeseries", response_model=list[TimeSeriesPoint])
 async def get_timeseries(
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     interval: Interval = Query("day"),
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TimeSeriesPoint]:
     """Clicks over time across all of the user's links."""
     start, end = _range(from_date, to_date)
     return await _timeseries(db, _user_scope(current_user), start, end, interval, include_bots)
@@ -226,28 +226,32 @@ async def get_timeseries(
 @router.get("/breakdown", response_model=list[BreakdownItem])
 async def get_breakdown(
     dimension: Dimension = Query(...),
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     limit: int = Query(10, ge=1, le=50),
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[BreakdownItem]:
     """Top values of a dimension across all of the user's links."""
     return await _breakdown(
-        db, _user_scope(current_user), dimension, _period_filters(from_date, to_date),
-        limit, include_bots,
+        db,
+        _user_scope(current_user),
+        dimension,
+        _period_filters(from_date, to_date),
+        limit,
+        include_bots,
     )
 
 
 @router.get("/links/{link_id}/summary", response_model=StatsSummary)
 async def get_link_summary(
     link_id: UUID,
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> StatsSummary:
     """Summary stats for a specific link (all time unless a range is given)."""
     scope = await _link_scope(db, link_id, current_user)
     return await _summary(db, [*scope, *_period_filters(from_date, to_date)])
@@ -256,13 +260,13 @@ async def get_link_summary(
 @router.get("/links/{link_id}/timeseries", response_model=list[TimeSeriesPoint])
 async def get_link_timeseries(
     link_id: UUID,
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     interval: Interval = Query("day"),
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[TimeSeriesPoint]:
     """Clicks over time for a link."""
     scope = await _link_scope(db, link_id, current_user)
     start, end = _range(from_date, to_date)
@@ -273,13 +277,13 @@ async def get_link_timeseries(
 async def get_link_breakdown(
     link_id: UUID,
     dimension: Dimension = Query(...),
-    from_date: Optional[datetime] = Query(None),
-    to_date: Optional[datetime] = Query(None),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     limit: int = Query(10, ge=1, le=50),
     include_bots: bool = Query(False),
     current_user: User = Depends(get_current_user_or_api_key),
     db: AsyncSession = Depends(get_db),
-):
+) -> list[BreakdownItem]:
     """Top values of a dimension for a link."""
     scope = await _link_scope(db, link_id, current_user)
     return await _breakdown(

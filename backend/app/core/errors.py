@@ -2,13 +2,14 @@
 
 Every error leaves the API as {"error": {"code": ..., "message": ..., "details"?: ...}}.
 """
+
 from http import HTTPStatus
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
@@ -20,8 +21,8 @@ class AppError(Exception):
         status_code: int,
         code: str,
         message: str,
-        details: Optional[dict[str, Any]] = None,
-        headers: Optional[dict[str, str]] = None,
+        details: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
     ):
         super().__init__(message)
         self.status_code = status_code
@@ -31,7 +32,7 @@ class AppError(Exception):
         self.headers = headers
 
 
-def error_body(code: str, message: str, details: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+def error_body(code: str, message: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build the uniform error payload."""
     error: dict[str, Any] = {"code": code, "message": message}
     if details is not None:
@@ -50,27 +51,27 @@ def register_error_handlers(app: FastAPI) -> None:
     """Install handlers that convert all errors to the uniform format."""
 
     @app.exception_handler(AppError)
-    async def handle_app_error(request: Request, exc: AppError) -> ORJSONResponse:
-        return ORJSONResponse(
+    async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
             error_body(exc.code, exc.message, exc.details),
             status_code=exc.status_code,
             headers=exc.headers,
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> ORJSONResponse:
+    async def handle_http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         if isinstance(exc.detail, dict) and "code" in exc.detail:
             body = {"error": exc.detail}
         else:
             body = error_body(_default_code(exc.status_code), str(exc.detail))
-        return ORJSONResponse(body, status_code=exc.status_code, headers=exc.headers)
+        return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
-    ) -> ORJSONResponse:
+    ) -> JSONResponse:
         errors = jsonable_encoder(exc.errors())
         message = errors[0]["msg"] if errors else "Invalid request"
-        return ORJSONResponse(
+        return JSONResponse(
             error_body("VALIDATION_ERROR", message, {"errors": errors}), status_code=422
         )

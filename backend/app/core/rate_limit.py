@@ -4,14 +4,15 @@ Every /api request is counted against one bucket per hour: the user (valid JWT),
 (valid key) or otherwise the client IP. Login and link unlock additionally have tight
 per-IP limits against password guessing. If Redis is unavailable requests are let through.
 """
+
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
 
 from fastapi import Request, Response
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 from sqlalchemy import select
 
@@ -21,7 +22,6 @@ from app.core.errors import AppError, error_body
 from app.core.redis import get_redis
 from app.core.security import decode_token, hash_token
 from app.models.models import ApiKey
-
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,10 @@ class RateLimitResult:
 
     @property
     def headers(self) -> dict[str, str]:
-        headers = {"X-RateLimit-Limit": str(self.limit), "X-RateLimit-Remaining": str(self.remaining)}
+        headers = {
+            "X-RateLimit-Limit": str(self.limit),
+            "X-RateLimit-Remaining": str(self.remaining),
+        }
         if not self.allowed:
             headers["Retry-After"] = str(self.retry_after)
         return headers
@@ -63,7 +66,7 @@ def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-async def hit(bucket: str, limit: int, window: int) -> Optional[RateLimitResult]:
+async def hit(bucket: str, limit: int, window: int) -> RateLimitResult | None:
     """Count one request in `bucket`; None if Redis is unavailable (fail open)."""
     now_ms = int(time.time() * 1000)
     try:
@@ -111,7 +114,7 @@ async def _api_key_valid(api_key: str) -> tuple[bool, str]:
                 select(ApiKey.id).where(ApiKey.key_hash == key_hash, ApiKey.revoked_at.is_(None))
             )
         cached = "1" if found else "0"
-        await redis.setex(cache_key, API_KEY_CACHE_TTL, cached)
+        await redis.set(cache_key, cached, ex=API_KEY_CACHE_TTL)
     return cached == "1", key_hash
 
 
@@ -149,7 +152,7 @@ async def rate_limit_middleware(
         return await call_next(request)
     if not result.allowed:
         error = _too_many(result)
-        return ORJSONResponse(
+        return JSONResponse(
             error_body(error.code, error.message, error.details),
             status_code=429,
             headers=result.headers,
