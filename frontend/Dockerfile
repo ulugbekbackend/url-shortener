@@ -1,17 +1,17 @@
 # Node 24 is the active LTS (Node 20 reached end-of-life on 2026-04-30)
 FROM node:24-alpine
 
+# Run as the image's unprivileged "node" user. Files are copied with that owner:
+# a later `chown -R` would duplicate node_modules into another layer.
 WORKDIR /app
+RUN chown node:node /app
+USER node
 
 # Dependencies first, so code changes don't invalidate this layer
-COPY package.json package-lock.json ./
+COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-COPY . .
-
-# The official image ships an unprivileged "node" user
-RUN chown -R node:node /app
-USER node
+COPY --chown=node:node . .
 
 EXPOSE 3000
 
