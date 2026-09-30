@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.api.deps import get_current_user_optional, get_current_user_or_api_key
+from app.api.deps import get_current_user_or_api_key
 from app.schemas.schemas import (
     BulkImportResponse, LinkCreate, LinkAnonymous, LinkUpdate, LinkResponse, LinkListResponse
 )
@@ -69,7 +69,7 @@ async def create_link(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_INPUT", "message": str(e)},
-        )
+        ) from e
 
 
 @router.post("/anonymous", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
@@ -89,7 +89,7 @@ async def create_link_anonymous(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_INPUT", "message": str(e)},
-        )
+        ) from e
 
 
 @router.get("", response_model=LinkListResponse)

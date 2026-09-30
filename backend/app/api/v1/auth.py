@@ -59,7 +59,7 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "REGISTRATION_FAILED", "message": str(e)},
-        )
+        ) from e
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -87,7 +87,7 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "INVALID_CREDENTIALS", "message": str(e)},
-        )
+        ) from e
 
 
 @router.post("/refresh", response_model=dict)
@@ -118,7 +118,7 @@ async def refresh(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "INVALID_REFRESH_TOKEN", "message": str(e)},
-        )
+        ) from e
 
 
 @router.post("/logout")

@@ -29,9 +29,9 @@ def validate_target_url(url: str) -> None:
     """Raise ValueError if the URL must not be shortened."""
     try:
         parts = urlsplit(url)
-        parts.port  # raises ValueError on an invalid port
+        _ = parts.port  # raises ValueError on an invalid port
     except ValueError:
-        raise ValueError("URL is malformed")
+        raise ValueError("URL is malformed") from None
 
     if parts.scheme not in ("http", "https"):
         raise ValueError("URL must start with http:// or https://")
@@ -51,7 +51,7 @@ def validate_target_url(url: str) -> None:
         try:
             ascii_host = host.encode("idna").decode("ascii")
         except UnicodeError:
-            raise ValueError("URL host is invalid")
+            raise ValueError("URL host is invalid") from None
         if not _HOSTNAME_RE.match(ascii_host):
             raise ValueError("URL host is invalid")
 

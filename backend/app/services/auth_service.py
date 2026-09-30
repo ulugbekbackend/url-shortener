@@ -93,7 +93,7 @@ class AuthService:
             await self.db.commit()
         except IntegrityError:
             await self.db.rollback()
-            raise _email_taken()
+            raise _email_taken() from None
         await self.db.refresh(user)
         return user
 

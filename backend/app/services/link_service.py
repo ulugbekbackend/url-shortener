@@ -1,8 +1,7 @@
 """Link service - business logic for links."""
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Optional, List
 from uuid import UUID
-import hashlib
 
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +12,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.core.redis import get_redis
 from app.core.security import generate_code, hash_password
-from app.models.models import Link, Tag, LinkTag
+from app.models.models import Link, Tag
 from app.services.url_validator import validate_target_url
 
 
@@ -105,7 +104,7 @@ class LinkService:
         except IntegrityError:
             # Lost a race for the same custom code
             await self.db.rollback()
-            raise _code_taken(code)
+            raise _code_taken(code) from None
         # Drop a cached "not found" for this code
         await self._invalidate_cache(code)
         return await self._reload(link.id)
@@ -187,11 +186,11 @@ class LinkService:
             count_query = count_query.where(Link.tags.any(Tag.name == tag))
         
         if status == "active":
-            query = query.where(Link.is_active == True)
-            count_query = count_query.where(Link.is_active == True)
+            query = query.where(Link.is_active.is_(True))
+            count_query = count_query.where(Link.is_active.is_(True))
         elif status == "disabled":
-            query = query.where(Link.is_active == False)
-            count_query = count_query.where(Link.is_active == False)
+            query = query.where(Link.is_active.is_(False))
+            count_query = count_query.where(Link.is_active.is_(False))
         
         # Apply sorting
         if sort == "clicks":

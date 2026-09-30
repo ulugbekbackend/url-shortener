@@ -30,7 +30,7 @@ def parse_csv(raw: bytes) -> list[CsvRow]:
     try:
         text = raw.decode("utf-8-sig")  # tolerate the BOM Excel adds
     except UnicodeDecodeError:
-        raise AppError(400, "INVALID_CSV", "CSV file must be UTF-8 encoded")
+        raise AppError(400, "INVALID_CSV", "CSV file must be UTF-8 encoded") from None
 
     reader = csv.DictReader(io.StringIO(text))
     if not reader.fieldnames or "url" not in {h.strip().lower() for h in reader.fieldnames}:

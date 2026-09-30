@@ -7,6 +7,7 @@ events left unacknowledged by a crashed worker are claimed by another one. Deliv
 at-least-once; the unique `clicks.stream_id` makes storing a redelivered event a no-op.
 """
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -179,16 +180,13 @@ def main() -> None:
         stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
+            # Windows: unsupported, Ctrl+C arrives as KeyboardInterrupt instead
+            with contextlib.suppress(NotImplementedError):
                 loop.add_signal_handler(sig, stop.set)
-            except NotImplementedError:
-                pass  # Windows: Ctrl+C arrives as KeyboardInterrupt instead
         await run(stop)
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(_main())
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":
