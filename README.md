@@ -9,7 +9,7 @@ A Bitly-style URL shortener with click analytics, built with FastAPI, React, Pos
 - **URL Shortening**: Short links with custom aliases, password protection, expiry dates and click limits
 - **Analytics Dashboard**: Clicks over time, unique visitors, devices, operating systems, browsers, referrers, countries
 - **Public API**: API keys for programmatic link management and analytics access
-- **Rate Limiting**: Sliding window per IP, user and API key, plus brute-force guards on login and link passwords
+- **Rate Limiting**: Sliding window per IP, user and API key, plus brute-force guards on login, link passwords and password reset
 
 ### Advanced
 - QR codes (PNG/SVG) with custom colors and size
@@ -178,8 +178,9 @@ httpOnly refresh cookie. Set `COOKIE_SECURE=false` in `backend/.env` when servin
 
 ## API Endpoints
 
-Interactive docs: `http://localhost:8000/docs`. Link, stats and tag endpoints accept either a
-`Bearer` token or an `X-API-Key` header; account and API-key management need a signed-in user.
+Interactive docs: `http://localhost:8000/docs`. Link and stats endpoints accept either a
+`Bearer` token or an `X-API-Key` header; tags, account and API-key management need a signed-in
+user.
 Errors always look like `{"error": {"code": "...", "message": "..."}}`.
 
 ### Authentication
@@ -227,6 +228,10 @@ All stats accept `from_date`/`to_date`; timeseries and breakdowns exclude bots u
 - `GET /{code}` - Redirect to the original URL (a password form for protected links)
 - `POST /{code}/unlock` - Submit the password of a protected link
 
+### Health
+- `GET /health/live` - The process is up
+- `GET /health/ready` - PostgreSQL and Redis are reachable
+
 ## Testing
 
 Backend tests run against the compose PostgreSQL and Redis, in a separate
@@ -249,7 +254,7 @@ url-shortener/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── api/              # redirect + /api/v1 routers
-│   │   ├── core/             # config, database, redis, security, errors, rate limiting
+│   │   ├── core/             # config, database, redis, security, errors, rate limiting, email
 │   │   ├── models/
 │   │   ├── schemas/
 │   │   ├── services/         # links, auth, bulk CSV, URL validation, click enrichment
@@ -287,9 +292,10 @@ url-shortener/
 4. **Security Measures**:
    - Passwords hashed with Argon2
    - Refresh tokens stored hashed, rotated on every use; reuse revokes all sessions
+   - Password reset tokens stored hashed, single-use and valid for an hour; the reset signs out every session
    - Access token kept in memory only, refresh token in an httpOnly cookie scoped to `/api/v1/auth`
    - URL validation against private/local addresses and redirect loops
-   - Rate limiting per IP/user/API key and brute-force limits on login and link passwords
+   - Rate limiting per IP/user/API key and brute-force limits on login, link passwords and password reset
    - CSV export escapes spreadsheet formulas
 
 5. **Frontend Architecture**:
