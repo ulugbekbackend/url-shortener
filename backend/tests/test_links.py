@@ -162,6 +162,58 @@ async def test_api_key_access_and_revocation(client: httpx.AsyncClient, user: di
     assert (await client.get(f"{API}/links", headers=key_headers)).status_code == 401
 
 
+async def test_api_key_is_shown_only_once(client: httpx.AsyncClient, user: dict) -> None:
+    h = user["headers"]
+    res = await client.post(f"{API}/api-keys", json={"name": "ci"}, headers=h)
+    assert res.status_code == 201
+    body = res.json()
+    full_key, key = body["full_key"], body["key"]
+    assert full_key.startswith("lnk_") and full_key.startswith(key["prefix"].rstrip("_"))
+    assert key["last_used_at"] is None and key["revoked_at"] is None
+
+    listed = await client.get(f"{API}/api-keys", headers=h)
+    assert [k["id"] for k in listed.json()] == [key["id"]]
+    assert full_key not in listed.text
+
+
+async def test_api_key_only_reaches_its_owners_data(client: httpx.AsyncClient, user: dict) -> None:
+    other = await register(client)
+    foreign = await create_link(client, other["headers"])
+    created = await client.post(f"{API}/api-keys", json={"name": "ci"}, headers=user["headers"])
+    key_headers = {"X-API-Key": created.json()["full_key"]}
+
+    res = await client.get(f"{API}/links/{foreign['id']}", headers=key_headers)
+    assert res.status_code == 404
+    assert (
+        await client.get(f"{API}/stats/links/{foreign['id']}/summary", headers=key_headers)
+    ).status_code == 404
+    unknown = {"X-API-Key": "lnk_" + "x" * 43}
+    assert (await client.get(f"{API}/links", headers=unknown)).status_code == 401
+
+
+async def test_api_keys_cannot_be_revoked_by_others(client: httpx.AsyncClient, user: dict) -> None:
+    other = await register(client)
+    created = await client.post(f"{API}/api-keys", json={"name": "ci"}, headers=user["headers"])
+    key = created.json()
+
+    res = await client.delete(f"{API}/api-keys/{key['key']['id']}", headers=other["headers"])
+    assert res.status_code == 404
+    missing = f"{API}/api-keys/00000000-0000-0000-0000-000000000000"
+    assert (await client.delete(missing, headers=user["headers"])).status_code == 404
+
+    # Still active for its owner
+    res = await client.get(f"{API}/links", headers={"X-API-Key": key["full_key"]})
+    assert res.status_code == 200
+
+
+async def test_api_key_create_validation(client: httpx.AsyncClient, user: dict) -> None:
+    h = user["headers"]
+    assert (await client.post(f"{API}/api-keys", json={"name": ""}, headers=h)).status_code == 422
+    too_long = {"name": "n" * 101}
+    assert (await client.post(f"{API}/api-keys", json=too_long, headers=h)).status_code == 422
+    assert (await client.post(f"{API}/api-keys", json={"name": "ci"})).status_code == 401
+
+
 async def test_revoking_a_key_twice_keeps_the_first_time(
     client: httpx.AsyncClient, user: dict
 ) -> None:
