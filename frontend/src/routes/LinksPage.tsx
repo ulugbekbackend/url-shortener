@@ -11,12 +11,12 @@ import type { Link } from "../types";
 import { Badge } from "../components/ui/Badge";
 import { CopyButton } from "../components/ui/CopyButton";
 import { Spinner } from "../components/ui/Spinner";
+import { ActionMenu } from "../components/ui/ActionMenu";
 import { QRModal } from "../components/ui/QRModal";
 import {
   Plus,
   Search,
   Filter,
-  MoreVertical,
   ExternalLink,
   BarChart3,
   QrCode,
@@ -304,72 +304,64 @@ export function LinksPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="relative">
+                      <ActionMenu
+                        open={openMenu === link.id}
+                        onOpenChange={(open) => setOpenMenu(open ? link.id : null)}
+                      >
                         <button
-                          onClick={() => setOpenMenu(openMenu === link.id ? null : link.id)}
-                          className="btn-ghost !p-1.5"
-                          aria-label="Actions"
+                          onClick={() => {
+                            navigate(`/links/${link.id}`);
+                            setOpenMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
                         >
-                          <MoreVertical size={16} />
+                          <BarChart3 size={14} /> Analytics
                         </button>
-                        {openMenu === link.id && (
-                          <div className="absolute right-0 top-full z-10 mt-1 w-48 rounded-lg border border-surface-200 bg-white py-1 shadow-lg dark:border-surface-700 dark:bg-surface-800">
-                            <button
-                              onClick={() => {
-                                navigate(`/links/${link.id}`);
-                                setOpenMenu(null);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
-                            >
-                              <BarChart3 size={14} /> Analytics
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditLink(link);
-                                setOpenMenu(null);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
-                            >
-                              <Edit size={14} /> Edit
-                            </button>
-                            <button
-                              onClick={() => {
-                                setQrLink(link);
-                                setOpenMenu(null);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
-                            >
-                              <QrCode size={14} /> QR Code
-                            </button>
-                            <button
-                              onClick={() => {
-                                toggleMutation.mutate(link);
-                                setOpenMenu(null);
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
-                            >
-                              {link.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                              {link.isActive ? "Disable" : "Enable"}
-                            </button>
-                            <hr className="my-1 border-surface-200 dark:border-surface-700" />
-                            <button
-                              onClick={() => {
-                                setOpenMenu(null);
-                                if (
-                                  window.confirm(
-                                    `Delete ${displayUrl(link.shortUrl)}? Its analytics will be lost.`,
-                                  )
-                                ) {
-                                  deleteMutation.mutate(link.id);
-                                }
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                            >
-                              <Trash2 size={14} /> Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                        <button
+                          onClick={() => {
+                            setEditLink(link);
+                            setOpenMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
+                        >
+                          <Edit size={14} /> Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            setQrLink(link);
+                            setOpenMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
+                        >
+                          <QrCode size={14} /> QR Code
+                        </button>
+                        <button
+                          onClick={() => {
+                            toggleMutation.mutate(link);
+                            setOpenMenu(null);
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-surface-700 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-700"
+                        >
+                          {link.isActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                          {link.isActive ? "Disable" : "Enable"}
+                        </button>
+                        <hr className="my-1 border-surface-200 dark:border-surface-700" />
+                        <button
+                          onClick={() => {
+                            setOpenMenu(null);
+                            if (
+                              window.confirm(
+                                `Delete ${displayUrl(link.shortUrl)}? Its analytics will be lost.`,
+                              )
+                            ) {
+                              deleteMutation.mutate(link.id);
+                            }
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </ActionMenu>
                     </td>
                   </tr>
                 ))}
