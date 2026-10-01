@@ -78,6 +78,8 @@ async def revoke_api_key(
             detail={"code": "API_KEY_NOT_FOUND", "message": "API key not found"},
         )
 
-    key.revoked_at = datetime.now(UTC)
-    await db.commit()
+    # Revoking twice is a no-op: keep the original revocation time
+    if key.revoked_at is None:
+        key.revoked_at = datetime.now(UTC)
+        await db.commit()
     await forget_api_key(key.key_hash)

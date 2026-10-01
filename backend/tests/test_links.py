@@ -162,6 +162,20 @@ async def test_api_key_access_and_revocation(client: httpx.AsyncClient, user: di
     assert (await client.get(f"{API}/links", headers=key_headers)).status_code == 401
 
 
+async def test_revoking_a_key_twice_keeps_the_first_time(
+    client: httpx.AsyncClient, user: dict
+) -> None:
+    h = user["headers"]
+    created = await client.post(f"{API}/api-keys", json={"name": "ci"}, headers=h)
+    key_id = created.json()["key"]["id"]
+    assert (await client.delete(f"{API}/api-keys/{key_id}", headers=h)).status_code == 204
+    first = (await client.get(f"{API}/api-keys", headers=h)).json()[0]["revoked_at"]
+    assert first is not None
+
+    assert (await client.delete(f"{API}/api-keys/{key_id}", headers=h)).status_code == 204
+    assert (await client.get(f"{API}/api-keys", headers=h)).json()[0]["revoked_at"] == first
+
+
 async def test_tags_list_with_counts(client: httpx.AsyncClient, user: dict) -> None:
     h = user["headers"]
     await create_link(client, h, tags=["common", "rare"])
