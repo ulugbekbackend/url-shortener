@@ -1,6 +1,9 @@
 """Auth service - business logic for authentication."""
 
+import logging
+import secrets
 from datetime import UTC, datetime, timedelta
+from html import escape
 from uuid import UUID
 
 from sqlalchemy import and_, delete, select
@@ -8,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.email import send_email
 from app.core.errors import AppError
 from app.core.redis import get_redis
 from app.core.security import (
@@ -18,12 +22,40 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.models.models import Link, RefreshToken, User
+from app.models.models import Link, PasswordResetToken, RefreshToken, User
 from app.services.link_service import click_counter_key, link_cache_key
+
+log = logging.getLogger(__name__)
 
 
 def _email_taken() -> AppError:
     return AppError(409, "EMAIL_TAKEN", "User with this email already exists")
+
+
+def password_reset_url(token: str) -> str:
+    return f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={token}"
+
+
+async def send_password_reset_email(email: str, name: str, token: str) -> None:
+    """Email the reset link; runs after the response, so failures are only logged."""
+    url = password_reset_url(token)
+    minutes = settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    text = (
+        f"Hi {name},\n\n"
+        f"Someone asked to reset the password for your {settings.APP_NAME} account.\n"
+        f"Open this link to choose a new one (valid for {minutes} minutes):\n\n{url}\n\n"
+        "If it wasn't you, ignore this email: your password stays the same.\n"
+    )
+    html = (
+        f"<p>Hi {escape(name)},</p>"
+        f"<p>Someone asked to reset the password for your {escape(settings.APP_NAME)} account.</p>"
+        f'<p><a href="{escape(url)}">Choose a new password</a> (valid for {minutes} minutes)</p>'
+        "<p>If it wasn't you, ignore this email: your password stays the same.</p>"
+    )
+    try:
+        await send_email(email, f"Reset your {settings.APP_NAME} password", text, html)
+    except Exception:
+        log.exception("Could not send the password reset email")
 
 
 class AuthService:
@@ -130,6 +162,45 @@ class AuthService:
             keys = [link_cache_key(code) for _, code in links]
             keys += [click_counter_key(link_id) for link_id, _ in links]
             await redis.delete(*keys)
+
+    async def create_password_reset(self, email: str) -> tuple[User, str] | None:
+        """Issue a reset token for the account, replacing older ones; None if no such user."""
+        user = await self.get_user_by_email(email)
+        if user is None:
+            return None
+        await self.db.execute(
+            delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+        )
+        token = secrets.token_urlsafe(32)
+        expires = timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+        self.db.add(
+            PasswordResetToken(
+                user_id=user.id,
+                token_hash=hash_token(token),
+                expires_at=datetime.now(UTC) + expires,
+            )
+        )
+        await self.db.commit()
+        return user, token
+
+    async def reset_password(self, token: str, new_password: str) -> None:
+        """Set a new password from a valid reset token and sign out every session."""
+        # Locked, so two submissions of the same link can't both succeed
+        stored = await self.db.scalar(
+            select(PasswordResetToken)
+            .where(
+                PasswordResetToken.token_hash == hash_token(token),
+                PasswordResetToken.used_at.is_(None),
+                PasswordResetToken.expires_at > datetime.now(UTC),
+            )
+            .with_for_update()
+        )
+        user = await self.get_user_by_id(stored.user_id) if stored else None
+        if stored is None or user is None:
+            raise AppError(400, "INVALID_RESET_TOKEN", "This reset link is invalid or has expired")
+        stored.used_at = datetime.now(UTC)
+        user.password_hash = hash_password(new_password)
+        await self._revoke_all_user_tokens(user.id)  # commits the changes above too
 
     async def refresh(
         self, refresh_token: str, user_agent: str | None = None, ip: str | None = None
