@@ -23,6 +23,12 @@ const LoginPage = lazy(() => import("./routes/AuthPages").then((m) => ({ default
 const RegisterPage = lazy(() =>
   import("./routes/AuthPages").then((m) => ({ default: m.RegisterPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import("./routes/PasswordResetPages").then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import("./routes/PasswordResetPages").then((m) => ({ default: m.ResetPasswordPage })),
+);
 const BulkUploadPage = lazy(() =>
   import("./routes/BulkUploadPage").then((m) => ({ default: m.BulkUploadPage })),
 );
@@ -84,6 +90,8 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route element={<AppLayout />}>
           <Route
             path="/dashboard"
