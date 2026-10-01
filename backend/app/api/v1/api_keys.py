@@ -1,6 +1,6 @@
 """API Keys endpoints."""
 
-from datetime import UTC
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.rate_limit import forget_api_key
 from app.core.security import generate_api_key
 from app.models.models import ApiKey, User
 from app.schemas.schemas import ApiKeyCreate, ApiKeyCreatedResponse, ApiKeyResponse
@@ -77,7 +78,8 @@ async def revoke_api_key(
             detail={"code": "API_KEY_NOT_FOUND", "message": "API key not found"},
         )
 
-    from datetime import datetime
-
-    key.revoked_at = datetime.now(UTC)
-    await db.commit()
+    # Revoking twice is a no-op: keep the original revocation time
+    if key.revoked_at is None:
+        key.revoked_at = datetime.now(UTC)
+        await db.commit()
+    await forget_api_key(key.key_hash)

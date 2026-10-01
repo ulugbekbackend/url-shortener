@@ -118,6 +118,16 @@ async def _api_key_valid(api_key: str) -> tuple[bool, str]:
     return cached == "1", key_hash
 
 
+async def forget_api_key(key_hash: str) -> None:
+    """Drop a key's cached validity so a revoked key loses its limit at once."""
+    try:
+        redis = await get_redis()
+        await redis.delete(f"apikey:{key_hash}")
+    except RedisError:
+        # The entry still expires on its own within API_KEY_CACHE_TTL
+        log.warning("Could not clear the cached API key", exc_info=True)
+
+
 async def _identify(request: Request) -> tuple[str, int]:
     """Pick the bucket and hourly limit for a request."""
     auth = request.headers.get("authorization", "")

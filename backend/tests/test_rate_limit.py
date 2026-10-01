@@ -44,6 +44,22 @@ async def test_signed_in_users_have_their_own_bucket(
     assert res.headers["x-ratelimit-limit"] == str(settings.RATE_LIMIT_USER)
 
 
+async def test_revoked_api_key_loses_its_bucket_at_once(
+    client: httpx.AsyncClient, user: dict
+) -> None:
+    created = await client.post(f"{API}/api-keys", json={"name": "ci"}, headers=user["headers"])
+    key = created.json()
+    key_headers = {"X-API-Key": key["full_key"]}
+    res = await client.get(f"{API}/links", headers=key_headers)
+    assert res.headers["x-ratelimit-limit"] == str(settings.RATE_LIMIT_API_KEY)
+
+    # The key's validity is cached; revoking must not wait for the cache to expire
+    await client.delete(f"{API}/api-keys/{key['key']['id']}", headers=user["headers"])
+    res = await client.get(f"{API}/links", headers=key_headers)
+    assert res.status_code == 401
+    assert res.headers["x-ratelimit-limit"] == str(settings.RATE_LIMIT_ANONYMOUS)
+
+
 async def test_password_guessing_on_a_link_is_limited(
     client: httpx.AsyncClient, user: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
