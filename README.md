@@ -5,11 +5,11 @@ A Bitly-style URL shortener with click analytics, built with FastAPI, React, Pos
 ## Features
 
 ### Core
-- **User Authentication**: JWT access tokens with rotating refresh tokens (httpOnly cookie), reuse detection, profile, password change and account deletion
+- **User Authentication**: JWT access tokens with rotating refresh tokens (httpOnly cookie), reuse detection, profile, password change, password reset by email and account deletion
 - **URL Shortening**: Short links with custom aliases, password protection, expiry dates and click limits
 - **Analytics Dashboard**: Clicks over time, unique visitors, devices, operating systems, browsers, referrers, countries
 - **Public API**: API keys for programmatic link management and analytics access
-- **Rate Limiting**: Sliding window per IP, user and API key, plus brute-force guards on login and link passwords
+- **Rate Limiting**: Sliding window per IP, user and API key, plus brute-force guards on login, link passwords and password reset
 
 ### Advanced
 - QR codes (PNG/SVG) with custom colors and size
@@ -83,6 +83,14 @@ RATE_LIMIT_USER=1000
 RATE_LIMIT_API_KEY=10000
 RATE_LIMIT_LOGIN=10                # attempts per IP per 15 minutes
 RATE_LIMIT_UNLOCK=10
+RATE_LIMIT_PASSWORD_RESET=5
+
+# Password reset email (optional; empty SMTP_HOST disables "Forgot password")
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=you@gmail.com
+SMTP_PASSWORD=                     # Gmail App Password, not the account password
+FRONTEND_URL=http://localhost:3000 # links in emails point here
 
 ANONYMOUS_LINK_TTL_DAYS=7
 BLOCKED_DOMAINS=                   # comma-separated
@@ -148,6 +156,17 @@ Several workers can run at once (they share a Redis consumer group). For country
 download the free [GeoLite2 City](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data)
 database and set `GEOLITE2_PATH`; without it geolocation is simply skipped.
 
+#### Password reset email (Gmail)
+"Forgot password?" sends a one-time link (valid for an hour) over SMTP. To use a Gmail account:
+1. Turn on 2-Step Verification for the account.
+2. Create an App Password at <https://myaccount.google.com/apppasswords>.
+3. In `backend/.env` set `SMTP_HOST=smtp.gmail.com`, `SMTP_USERNAME` to the Gmail address and
+   `SMTP_PASSWORD` to the 16-character App Password, then restart the backend.
+
+Gmail sends only as that address (or its aliases) and limits personal accounts to about 500
+messages a day, so it suits development and testing; use a transactional email service in
+production. Without `SMTP_HOST` the endpoint answers `503 EMAIL_DISABLED`.
+
 #### Frontend
 ```bash
 cd frontend
@@ -159,8 +178,9 @@ httpOnly refresh cookie. Set `COOKIE_SECURE=false` in `backend/.env` when servin
 
 ## API Endpoints
 
-Interactive docs: `http://localhost:8000/docs`. Link, stats and tag endpoints accept either a
-`Bearer` token or an `X-API-Key` header; account and API-key management need a signed-in user.
+Interactive docs: `http://localhost:8000/docs`. Link and stats endpoints accept either a
+`Bearer` token or an `X-API-Key` header; tags, account and API-key management need a signed-in
+user.
 Errors always look like `{"error": {"code": "...", "message": "..."}}`.
 
 ### Authentication
@@ -171,6 +191,8 @@ Errors always look like `{"error": {"code": "...", "message": "..."}}`.
 - `GET /api/v1/auth/me` - Current user
 - `PATCH /api/v1/auth/me` - Update name/email
 - `POST /api/v1/auth/change-password` - Change password (signs out other sessions)
+- `POST /api/v1/auth/forgot-password` - Email a password reset link (same answer for unknown emails)
+- `POST /api/v1/auth/reset-password` - Set a new password with the emailed token (signs out every session)
 - `DELETE /api/v1/auth/me` - Delete the account and all its data
 
 ### Links
@@ -206,6 +228,10 @@ All stats accept `from_date`/`to_date`; timeseries and breakdowns exclude bots u
 - `GET /{code}` - Redirect to the original URL (a password form for protected links)
 - `POST /{code}/unlock` - Submit the password of a protected link
 
+### Health
+- `GET /health/live` - The process is up
+- `GET /health/ready` - PostgreSQL and Redis are reachable
+
 ## Testing
 
 Backend tests run against the compose PostgreSQL and Redis, in a separate
@@ -228,7 +254,7 @@ url-shortener/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── api/              # redirect + /api/v1 routers
-│   │   ├── core/             # config, database, redis, security, errors, rate limiting
+│   │   ├── core/             # config, database, redis, security, errors, rate limiting, email
 │   │   ├── models/
 │   │   ├── schemas/
 │   │   ├── services/         # links, auth, bulk CSV, URL validation, click enrichment
@@ -266,9 +292,10 @@ url-shortener/
 4. **Security Measures**:
    - Passwords hashed with Argon2
    - Refresh tokens stored hashed, rotated on every use; reuse revokes all sessions
+   - Password reset tokens stored hashed, single-use and valid for an hour; the reset signs out every session
    - Access token kept in memory only, refresh token in an httpOnly cookie scoped to `/api/v1/auth`
    - URL validation against private/local addresses and redirect loops
-   - Rate limiting per IP/user/API key and brute-force limits on login and link passwords
+   - Rate limiting per IP/user/API key and brute-force limits on login, link passwords and password reset
    - CSV export escapes spreadsheet formulas
 
 5. **Frontend Architecture**:

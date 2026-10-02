@@ -38,7 +38,10 @@ from app.core.redis import close_redis, get_redis  # noqa: E402
 from app.main import app  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-TABLES = "users, links, tags, link_tags, clicks, link_daily_stats, refresh_tokens, api_keys"
+TABLES = (
+    "users, links, tags, link_tags, clicks, link_daily_stats, refresh_tokens, api_keys, "
+    "password_reset_tokens"
+)
 
 
 @pytest.fixture(scope="session", autouse=True)

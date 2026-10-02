@@ -43,6 +43,20 @@ export const api = {
         auth: false,
       }),
     logout: () => request<void>("/auth/logout", { method: "POST", auth: false }),
+    /** Same answer whether or not the account exists */
+    forgotPassword: (email: string) =>
+      request<{ message: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: { email },
+        auth: false,
+      }),
+    /** Signs out every session of the account */
+    resetPassword: (token: string, newPassword: string) =>
+      request<{ message: string }>("/auth/reset-password", {
+        method: "POST",
+        body: { token, newPassword },
+        auth: false,
+      }),
     me: () => request<User>("/auth/me"),
     updateProfile: (changes: { name?: string; email?: string }) =>
       request<User>("/auth/me", { method: "PATCH", body: changes }),

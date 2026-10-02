@@ -1,23 +1,28 @@
 """Auth API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce
+from app.core.email import email_enabled
+from app.core.errors import AppError
+from app.core.rate_limit import BRUTE_FORCE_WINDOW, client_ip, enforce, hit
+from app.core.security import hash_token
 from app.models.models import User
 from app.schemas.schemas import (
     AccountDelete,
+    ForgotPassword,
     PasswordChange,
+    PasswordReset,
     TokenResponse,
     UserLogin,
     UserRegister,
     UserResponse,
     UserUpdate,
 )
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -184,3 +189,46 @@ async def delete_me(
     """Permanently delete the account and all its data (password required)."""
     await AuthService(db).delete_account(current_user, data.password)
     _clear_refresh_cookie(response)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+    data: ForgotPassword,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Email a password reset link. The answer is the same whether the account exists or not."""
+    if not email_enabled():
+        raise AppError(
+            503, "EMAIL_DISABLED", "Password reset by email is not available on this server"
+        )
+    await enforce(
+        f"pwreset:{client_ip(request)}", settings.RATE_LIMIT_PASSWORD_RESET, BRUTE_FORCE_WINDOW
+    )
+    # Over the per-address limit: quietly send nothing rather than reveal anything
+    per_address = await hit(
+        f"pwreset-email:{hash_token(data.email.lower())}",
+        settings.PASSWORD_RESET_EMAILS_PER_HOUR,
+        3600,
+    )
+    if per_address is None or per_address.allowed:
+        issued = await AuthService(db).create_password_reset(data.email)
+        if issued:
+            user, token = issued
+            background_tasks.add_task(send_password_reset_email, user.email, user.name, token)
+    return {"message": "If an account exists for this email, a reset link is on its way"}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    data: PasswordReset, request: Request, db: AsyncSession = Depends(get_db)
+) -> dict[str, str]:
+    """Set a new password with the token from the reset email; all sessions are signed out."""
+    await enforce(
+        f"pwreset-submit:{client_ip(request)}",
+        settings.RATE_LIMIT_PASSWORD_RESET,
+        BRUTE_FORCE_WINDOW,
+    )
+    await AuthService(db).reset_password(data.token, data.new_password)
+    return {"message": "Your password has been reset, you can sign in now"}

@@ -53,6 +53,23 @@ class Settings(BaseSettings):
     # Brute-force guards, per client IP per 15 minutes
     RATE_LIMIT_LOGIN: int = 10
     RATE_LIMIT_UNLOCK: int = 10
+    RATE_LIMIT_PASSWORD_RESET: int = 5
+    # Reset emails to one address per hour, so nobody can flood someone's inbox
+    PASSWORD_RESET_EMAILS_PER_HOUR: int = 3
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # Email (SMTP). Empty SMTP_HOST disables sending; Gmail: smtp.gmail.com:587 + app password
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    # Sender address; defaults to SMTP_USERNAME (Gmail only sends as the account or its aliases)
+    SMTP_FROM: str = ""
+    SMTP_STARTTLS: bool = True
+    SMTP_TIMEOUT: int = 10  # seconds
+
+    # Frontend origin, for links in emails (password reset)
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # GeoIP
     GEOLITE2_PATH: str = "/app/data/GeoLite2-City.mmdb"
