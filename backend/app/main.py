@@ -30,6 +30,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
+    contact={"name": "Ulugbek Yuldoshev", "url": "https://ulugbekdev.uz"},
+    license_info={"name": "MIT", "identifier": "MIT"},
     lifespan=lifespan,
 )
 
