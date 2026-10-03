@@ -305,4 +305,4 @@ url-shortener/
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE). Free to use, modify and distribute.
