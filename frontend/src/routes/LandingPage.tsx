@@ -454,6 +454,26 @@ export function LandingPage() {
               © 2026 Linkly. Open source.
             </p>
           </div>
+          <div className="mt-6 border-t border-surface-200 pt-6 text-center text-sm text-surface-500 dark:border-surface-800 dark:text-surface-400">
+            Developed by{" "}
+            <a
+              href="https://ulugbekdev.uz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-surface-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400 transition-colors"
+            >
+              Ulugbek
+            </a>{" "}
+            ·{" "}
+            <a
+              href="https://ulugbekdev.uz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-surface-900 dark:hover:text-white transition-colors"
+            >
+              ulugbekdev.uz
+            </a>
+          </div>
         </div>
       </footer>
     </div>
